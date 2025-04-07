@@ -17,6 +17,13 @@ Rendering environment... v1.43b (BJS)
 
 ---
 
+## Access the Construct
+
+> **Follow the White Rabbit:** [**PLAY THE LIVE DEMO HERE**](https://your-deployment-link-will-go-here.netlify.app/maze.html) <br>
+> _**(Link to be updated once deployed)**_
+
+---
+
 ## Overview
 
 Welcome to the grid, operator. This project is a first-person maze shooter inspired by the "back rooms" and "source code" aesthetic of The Matrix. You navigate a procedurally generated maze, eliminate rogue Agent programs, and follow the white rabbit to find the exit.
@@ -44,13 +51,6 @@ SYSTEM_MSG: Reality is fragile here. Expect glitches.
 *   **Game States:** Handles playing, paused, game over, and win conditions.
 *   **Sound Design:** Basic sound effects using the Web Audio API.
 *   **Debug Features:** Toggleable overlays for map view and potentially collision info.
-
----
-
-## Access the Construct
-
-> **Follow the White Rabbit:** [**PLAY THE LIVE DEMO HERE**](https://your-deployment-link-will-go-here.netlify.app/maze.html) <br>
-> _**(Link to be updated once deployed)**_
 
 ---
 
