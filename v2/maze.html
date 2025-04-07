@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BACKDOORS ::_BREACH :: FOLLOW_THE_RABBIT</title>
+    <!-- Link to CSS in styles folder -->
+    <link rel="stylesheet" href="styles/main.css">
+    <style>
+        /* Ensure canvas fills the screen */
+        html, body {
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        #mazeCanvas {
+            width: 100%;
+            height: 100%;
+            touch-action: none; /* Recommended for Babylon.js */
+        }
+    </style>
+</head>
+<body>
+    <!-- Blocker and Instructions (Updated Structure) -->
+    <div id="blocker">
+        <div id="instructions">
+            <!-- Split into glitching title and static text -->
+            <span id="glitchTitle" style="font-size:36px; display: inline-block;">Loading Environment...</span>
+            <br/>
+            <span id="staticInstructions" style="font-size: 14px; display: block; margin-top: 15px;">
+                (Initializing subsystems...)
+            </span>
+        </div>
+    </div>
+
+    <!-- Main 3D Canvas -->
+    <canvas id="mazeCanvas"></canvas>
+
+    <!-- Debug Map Canvas -->
+    <canvas id="debugMapCanvas"></canvas>
+
+    <!-- Reticle -->
+    <div id="reticle">+</div>
+
+    <!-- Version Info -->
+    <div id="versionInfo">v1.47e</div> <!-- Match JS Version -->
+
+    <!-- Damage Overlay Element -->
+    <div id="damageOverlay"></div>
+
+    <!-- HUD Elements -->
+    <div id="hpContainer" class="hud-base">
+        <span class="hud-label">HP</span>
+        <div id="hpBarOuter"><div id="hpBarFill"></div></div>
+    </div>
+    <div id="ammoHud" class="hud-base matrix-box">
+        <span class="hud-label" id="weaponName">9mm</span>
+        <span class="hud-value" id="ammoCount">-- / --</span>
+        <div id="reloadIndicator">
+             <svg viewBox="0 0 36 36" class="reload-svg">
+                 <path class="reload-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                 <path id="reloadProgress" class="reload-progress" stroke-dasharray="100, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+             </svg>
+        </div>
+    </div>
+    <div id="agentHud" class="hud-base matrix-box">
+        <span class="hud-label">Agents</span>
+        <span class="hud-value" id="agentCount">--</span>
+    </div>
+
+    <!-- Scripts -->
+    <!-- Load Babylon.js Libraries FIRST -->
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+
+    <!-- Load YOUR game modules from js/ folder WITHOUT defer -->
+    <!-- Order matters -->
+    <script src="js/audio.js"></script>
+    <script src="js/environment.js"></script>
+    <script src="js/player.js"></script>
+    <!-- <script src="js/agents.js"></script> -->       <!-- To be created -->
+    <!-- <script src="js/rabbits.js"></script> -->      <!-- To be created -->
+    <!-- <script src="js/shooting.js"></script> -->     <!-- To be created -->
+    <!-- <script src="js/ui.js"></script> -->           <!-- To be created -->
+    <!-- <script src="js/game_state.js"></script> -->  <!-- To be created -->
+
+    <!-- Load main entry point LAST -->
+    <script src="js/main.js"></script>
+
+</body>
+</html>

@@ -1,6 +1,9 @@
 # Ignore Git tools folder
 git-tools/
 
+# Ignore backup folder
+backup/
+
 # Ignore temporary files
 *.tmp
 *.bak 

@@ -1,80 +1,277 @@
-// maze_babylon.js - MINIMAL TEST
-console.log("Minimal Babylon JS Test Script Loaded.");
+// maze_babylon.js
+// Version: 1.47e (Babylon.js - Fix Controls, Add Maze/Map, Sensitivity)
 
-// Get the canvas element
-const canvas = document.getElementById("mazeCanvas");
-if (!canvas) {
-    console.error("CRITICAL: Canvas element 'mazeCanvas' not found!");
-} else {
-    console.log("Canvas element found.");
+// =============================================================================
+// Game Constants
+// =============================================================================
+// --- Mouse Sensitivity ---
+// ADJUSTABLE: Higher value = more sensitive (Range 1-10 recommended)
+const MOUSE_SENSITIVITY_SETTING = 5;
+// Convert setting to Babylon's angularSensibility (Lower value = more sensitive)
+const BJS_ANGULAR_SENSITIVITY = 10000 / (MOUSE_SENSITIVITY_SETTING * 1.5 + 3); // Adjust formula as needed
 
-    // Create the Babylon.js engine
-    let engine = null;
-    try {
-        engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true });
-        console.log("Babylon engine created.");
-    } catch (e) {
-        console.error("Error creating Babylon engine:", e);
-    }
+// --- Maze ---
+const PATH_WIDTH_SETTING = 5; const MAZE_GRID_SCALE = Math.max(3, Math.floor(PATH_WIDTH_SETTING) * 2 + 1); const MAZE_WIDTH_CELLS = 12; const MAZE_HEIGHT_CELLS = 12; const CELL_SIZE = 10; const MAZE_WIDTH_UNITS = MAZE_WIDTH_CELLS * MAZE_GRID_SCALE * CELL_SIZE; const MAZE_HEIGHT_UNITS = MAZE_HEIGHT_CELLS * MAZE_GRID_SCALE * CELL_SIZE; const WALL_HEIGHT = 30; const WALL_HEIGHT_SHORT = 8; const WALL_THICKNESS = CELL_SIZE; const SHORT_WALL_CHANCE = 0.08; const CROSS_CONNECTION_CHANCE = 0.25; const DOOR_HEIGHT_FACTOR = 0.85; const DOOR_WIDTH_FACTOR = 0.4; const DOOR_DEPTH = 0.3; const visualGridWidth = MAZE_WIDTH_CELLS * MAZE_GRID_SCALE; const visualGridHeight = MAZE_HEIGHT_CELLS * MAZE_GRID_SCALE; const MAX_WALL_INSTANCES_REF = Math.ceil(visualGridWidth * visualGridHeight * 1.2);
+// --- Player ---
+const PLAYER_HEIGHT = WALL_HEIGHT * 0.5; const PLAYER_EYE_HEIGHT = WALL_HEIGHT * 0.85; const PLAYER_RADIUS = PLAYER_HEIGHT * 0.25; const PLAYER_COLLISION_HEIGHT = PLAYER_EYE_HEIGHT * 1.5; const PLAYER_MAX_HP = 100;
+// *** Player Speed Variables ***
+const PLAYER_SPEED_WALK = 12.0;
+const PLAYER_SPEED_RUN = 24.0;
+const DAMAGE_OVERLAY_FADE_OUT_TIME = 80; const DAMAGE_OVERLAY_FADE_IN_TIME = 80; const PLAYER_DAMAGE_SHAKE_DURATION = 0.15; const PLAYER_DAMAGE_SHAKE_INTENSITY_POS = 0.10; const PLAYER_DAMAGE_SHAKE_INTENSITY_ROT = 0.008;
+// --- Gun ---
+const GUN_CLIP_SIZE = 12; const GUN_RELOAD_TIME = 1.5; const GUN_FIRE_RATE = 0.15; const GUN_FORWARD_OFFSET = 1.2; const GUN_RIGHT_OFFSET = 0.35; const GUN_DOWN_OFFSET = -0.3; const GUN_BARREL_LENGTH = 0.4; const GUN_BARREL_RADIUS = 0.04; const GUN_HANDLE_HEIGHT = 0.25; const GUN_HANDLE_WIDTH = 0.08; const GUN_HANDLE_DEPTH = 0.15;
+// --- Bullet ---
+const BULLET_SPEED = 400.0; const BULLET_SIZE = 0.15; const AGENT_BULLET_SIZE = 0.3; const BULLET_LIFESPAN = 2.0;
+// --- Agent ---
+const STARTING_AGENT_COUNT = 2; const AGENT_HP = 2; const AGENT_BODY_WIDTH = PLAYER_RADIUS * 0.5 * 2; const AGENT_BODY_HEIGHT = PLAYER_HEIGHT * 0.9; const AGENT_BODY_DEPTH_FACTOR = 0.5; const AGENT_HEAD_SIZE = PLAYER_RADIUS * 0.7 * 1.5; const AGENT_COLLISION_DISTANCE = PLAYER_RADIUS + AGENT_BODY_WIDTH * 0.8; const AGENT_HIT_COLOR_HEX = 0xff0000; const AGENT_HIT_DURATION = 0.15; const AGENT_HP_BAR_DURATION = 3.0; const AGENT_HP_BAR_WIDTH = AGENT_BODY_WIDTH * 1.5;
+// --- Agent AI ---
+const AGENT_SPEED_PATROL = 8.0; const AGENT_SPEED_ATTACK = 16.0; const AGENT_LOS_CHECK_INTERVAL = 0.25; const AGENT_MAX_VIEW_DISTANCE = CELL_SIZE * MAZE_GRID_SCALE * 6; const AGENT_TIME_TO_LOSE_TARGET = 1.5; const AGENT_SEARCH_DURATION = 6.0; const AGENT_TURN_SPEED = Math.PI * 0.8; const AGENT_FIRE_RATE = 0.7; const AGENT_BULLET_SPEED = 800.0; const AGENT_BULLET_DAMAGE = 12; const AGENT_BULLET_SPREAD = 0.04; const AGENT_MELEE_RANGE = PLAYER_RADIUS + AGENT_BODY_WIDTH * 1.8; const AGENT_MELEE_DAMAGE = 8; const AGENT_MELEE_COOLDOWN = 1.5; const AGENT_MELEE_BURST_COUNT_MIN = 2; const AGENT_MELEE_BURST_COUNT_MAX = 4; const AGENT_MELEE_BURST_INTERVAL = 0.2; const AGENT_TARGET_CELL_RECALC_INTERVAL = 0.5; const AGENT_WAYPOINT_THRESHOLD = CELL_SIZE * 0.2; const AGENT_STUCK_TIMEOUT = 5.0;
+// --- Rabbit ---
+const INITIAL_RABBIT_SPAWN_COUNT = 2; const MAX_RABBITS = 4; const RABBIT_SPAWN_INTERVAL = 15.0; const RABBIT_MAP_REVEAL_DURATION = 3.0; const RABBIT_PICKUP_MENU_DURATION = 5.0; const RABBIT_PICKUP_DISTANCE_FACTOR = 1.8; const RABBIT_INSTANCE_SCALE = 3.0; const RABBIT_GROUND_LEVEL = 0.01; const RABBIT_BODY_RADIUS = 0.5 * 0.75; const RABBIT_BODY_HEIGHT = 0.8; const RABBIT_HEAD_RADIUS = 0.5; const RABBIT_COLOR_WHITE = new BABYLON.Color3(1, 1, 1); const RABBIT_COLOR_GREY = new BABYLON.Color3(0.8, 0.8, 0.8); const RABBIT_NOSE_COLOR_BJS = new BABYLON.Color3.FromHexString("#ffa7bd"); const RABBIT_SHIMMER_SPEED = 3.0;
+// --- Map ---
+const DEBUG_MAP_CANVAS_SIZE = 400; const DEBUG_MAP_WALL_COLOR = 'rgba(0, 255, 0, 0.6)'; const DEBUG_MAP_WALL_FLICKER_CHANCE = 0.03; const DEBUG_MAP_WALL_FLICKER_COLOR = 'rgba(150, 255, 150, 0.75)'; const DEBUG_MAP_PLAYER_COLOR = 'rgba(200, 255, 255, 0.75)'; const DEBUG_MAP_AGENT_COLOR = 'rgba(100, 255, 100, 0.7)'; const DEBUG_MAP_RABBIT_COLOR = 'rgba(255, 192, 203, 0.8)'; const DEBUG_MAP_ENTITY_FLICKER_CHANCE = 0.05; const DEBUG_MAP_ENTITY_FLICKER_COLOR = 'rgba(255, 255, 255, 0.85)';
+// --- HUD & Effects ---
+const HUD_HP_BAR_SHIMMER_SPEED = 4.0; const HUD_HP_BAR_SHIMMER_AMOUNT = 15; const HUD_TEXT_GLITCH_INTENSITY = 0.03; const HUD_TEXT_GLITCH_CHARS = ['_', '^', '~', '*', ';', '|']; const MENU_GLITCH_CHARS = ['█', '▓', '▒', '░', '_', '^', '~', '!', '*', ';', ':', '|', '/', '\\', ' '];
 
-    if (!engine) {
-        console.error("Engine creation failed.");
-    } else {
-        // Create a basic scene
-        const createScene = function () {
-            const scene = new BABYLON.Scene(engine);
-            scene.clearColor = new BABYLON.Color3(0.1, 0.0, 0.1); // Dark purple background
+// =============================================================================
+// Game State Variables
+// =============================================================================
+const mazeGrid = []; const activeBullets = []; const agents = []; const activeRabbits = [];
+let canvas = null; let engine = null; let scene = null; let camera = null; let playerLight = null; let wallMeshFull = null; let wallMeshShort = null; let doorMeshTemplate = null; let floorMesh_BJS = null; let ceilingMesh_BJS = null; let gunGroup_BJS = null; let bulletMaterial_BJS = null;
+let isPointerLocked = false; /*let moveForward = false; let moveBackward = false; let moveLeft = false; let moveRight = false;*/ let isRunning = false; // WASD flags not needed with UniversalCamera
+let playerHP = PLAYER_MAX_HP; let playerPosition = new BABYLON.Vector3(0, PLAYER_EYE_HEIGHT, 0);
+let gameWon = false; let gameOver = false; let agentsRemaining = 0; let mazeExitObject_BJS = null; let mazeExitPosition = null;
+let currentAmmo = GUN_CLIP_SIZE; let isReloading = false; let reloadTimer = 0; let canShoot = true; let shootTimer = 0;
+let rabbitSpawnTimer = RABBIT_SPAWN_INTERVAL; let mapDisplayTimer = 0; let menuDisplayTimer = 0; let isMenuDisplayedForRabbit = false; let shakeTimer = 0;
 
-            // Create a basic camera
-            const camera = new BABYLON.FreeCamera("camera1", new BABYLON.Vector3(0, 5, -10), scene);
-            camera.setTarget(BABYLON.Vector3.Zero());
-            camera.attachControl(canvas, true);
+// =============================================================================
+// Debugging Variables
+// =============================================================================
+let DEBUG_COLLISION = false; let DEBUG_MOVEMENT = false; let DEBUG_AGENT = true; let DEBUG_MAP_VISIBLE = false; let debugMapCanvas = null; let debugMapCtx = null;
 
-            // Create a basic light
-            const light = new BABYLON.HemisphericLight("light1", new BABYLON.Vector3(0, 1, 0), scene);
-            light.intensity = 0.7;
+// =============================================================================
+// Reusable Babylon Objects
+// =============================================================================
+const tempVec3 = new BABYLON.Vector3(); const tempQuat = new BABYLON.Quaternion();
 
-            // Create a ground plane
-            const ground = BABYLON.MeshBuilder.CreateGround("ground1", {width: 6, height: 6, subdivisions: 2}, scene);
+// =============================================================================
+// Coordinate Conversion Helpers
+// =============================================================================
+function worldToGrid(worldX, worldZ) { const visualGridWidthTotal = MAZE_WIDTH_CELLS * MAZE_GRID_SCALE; const visualGridHeightTotal = MAZE_HEIGHT_CELLS * MAZE_GRID_SCALE; const visualGridXFloat = (worldX / CELL_SIZE) + (visualGridWidthTotal / 2); const visualGridZFloat = (worldZ / CELL_SIZE) + (visualGridHeightTotal / 2); const logicalGridX = Math.floor(visualGridXFloat / MAZE_GRID_SCALE); const logicalGridY = Math.floor(visualGridZFloat / MAZE_GRID_SCALE); const clampedX = Math.max(0, Math.min(MAZE_WIDTH_CELLS - 1, logicalGridX)); const clampedY = Math.max(0, Math.min(MAZE_HEIGHT_CELLS - 1, logicalGridY)); return { x: clampedX, y: clampedY }; }
+function gridToWorld(gridX, gridY) { const worldX = (gridX - MAZE_WIDTH_CELLS / 2 + 0.5) * MAZE_GRID_SCALE * CELL_SIZE; const worldZ = (gridY - MAZE_HEIGHT_CELLS / 2 + 0.5) * MAZE_GRID_SCALE * CELL_SIZE; return new BABYLON.Vector3(worldX, 0, worldZ); }
+function visualGridToWorldPos(visualGridX, visualGridY) { const visualGridWidthTotal = MAZE_WIDTH_CELLS * MAZE_GRID_SCALE; const visualGridHeightTotal = MAZE_HEIGHT_CELLS * MAZE_GRID_SCALE; const worldX = (visualGridX - visualGridWidthTotal / 2 + 0.5) * CELL_SIZE; const worldZ = (visualGridY - visualGridHeightTotal / 2 + 0.5) * CELL_SIZE; return new BABYLON.Vector3(worldX, 0, worldZ); };
 
-             // Create a simple box
-             const box = BABYLON.MeshBuilder.CreateBox("box1", { size: 1 }, scene);
-             box.position.y = 0.5;
+// =============================================================================
+// Maze Generation Functions
+// =============================================================================
+function initMazeGrid() { mazeGrid.length = 0; for (let y = 0; y < MAZE_HEIGHT_CELLS; y++) { mazeGrid[y] = []; for (let x = 0; x < MAZE_WIDTH_CELLS; x++) { mazeGrid[y][x] = { x: x, y: y, visited: false, walls: { top: true, bottom: true, left: true, right: true }, isWall: true, isPath: false }; } } }
+function getNeighbors(cell) { const neighbors = []; const { x, y } = cell; const potential = [{ x: x, y: y - 2 }, { x: x, y: y + 2 }, { x: x - 2, y: y }, { x: x + 2, y: y }]; for (const p of potential) { if (p.y >= 0 && p.y < MAZE_HEIGHT_CELLS && p.x >= 0 && p.x < MAZE_WIDTH_CELLS) { const neighbor = mazeGrid[p.y]?.[p.x]; if (neighbor && !neighbor.visited) { neighbors.push(neighbor); } } } return neighbors; }
+function removeWall(cell1, cell2) { const dx = cell1.x - cell2.x; const dy = cell1.y - cell2.y; let wallX, wallY; if (dx === 2) { wallX = cell1.x - 1; wallY = cell1.y; cell1.walls.left = false; cell2.walls.right = false; } else if (dx === -2) { wallX = cell1.x + 1; wallY = cell1.y; cell1.walls.right = false; cell2.walls.left = false; } else if (dy === 2) { wallX = cell1.x; wallY = cell1.y - 1; cell1.walls.top = false; cell2.walls.bottom = false; } else if (dy === -2) { wallX = cell1.x; wallY = cell1.y + 1; cell1.walls.bottom = false; cell2.walls.top = false; } if (wallX !== undefined && wallY !== undefined && mazeGrid[wallY]?.[wallX]) { mazeGrid[wallY][wallX].isWall = false; mazeGrid[wallY][wallX].isPath = true; if (dx === 2 || dx === -2) { mazeGrid[wallY][wallX].walls.left = false; mazeGrid[wallY][wallX].walls.right = false; } if (dy === 2 || dy === -2) { mazeGrid[wallY][wallX].walls.top = false; mazeGrid[wallY][wallX].walls.bottom = false; } } else { console.warn(`Could not find wall cell between (${cell1.x},${cell1.y}) and (${cell2.x},${cell2.y})`); } }
+function generateMaze(startCell) { const stack = []; startCell.visited = true; startCell.isWall = false; startCell.isPath = true; stack.push(startCell); while (stack.length > 0) { const current = stack.pop(); const neighbors = getNeighbors(current); if (neighbors.length > 0) { stack.push(current); const chosen = neighbors[Math.floor(Math.random() * neighbors.length)]; removeWall(current, chosen); chosen.visited = true; chosen.isWall = false; chosen.isPath = true; stack.push(chosen); } } }
+function addCrossConnections(chance) { let connectionsAdded = 0; for (let y = 0; y < MAZE_HEIGHT_CELLS; y++) { for (let x = 0; x < MAZE_WIDTH_CELLS; x++) { const cell = mazeGrid[y]?.[x]; if (!cell || !cell.isPath) continue; if (cell.walls.right && x < MAZE_WIDTH_CELLS - 2) { const wallCellX = x + 1; const targetCellX = x + 2; if (mazeGrid[y]?.[wallCellX]?.isPath && mazeGrid[y]?.[targetCellX]?.isPath) { if (Math.random() < chance) { cell.walls.right = false; mazeGrid[y][wallCellX].walls.left = false; connectionsAdded++; } } } if (cell.walls.bottom && y < MAZE_HEIGHT_CELLS - 2) { const wallCellY = y + 1; const targetCellY = y + 2; if (mazeGrid[wallCellY]?.[x]?.isPath && mazeGrid[targetCellY]?.[x]?.isPath) { if (Math.random() < chance) { cell.walls.bottom = false; mazeGrid[wallCellY][x].walls.top = false; connectionsAdded++; } } } } } console.log(`Added ${connectionsAdded} cross connections.`); }
 
-            console.log("Basic scene created.");
-            return scene;
-        };
+// =============================================================================
+// A* Pathfinding Implementation
+// =============================================================================
+class SimplePriorityQueue { constructor() { this._nodes = []; } enqueue(priority, key) { this._nodes.push({ key: key, priority: priority }); this.sort(); } dequeue() { return this._nodes.shift().key; } isEmpty() { return !this._nodes.length; } sort() { this._nodes.sort((a, b) => a.priority - b.priority); } }
+function heuristic(a, b) { return Math.abs(a.x - b.x) + Math.abs(a.y - b.y); }
+function findPathAStar(grid, start, goal, maxCells = MAZE_WIDTH_CELLS * MAZE_HEIGHT_CELLS * 4) { const openSet = new SimplePriorityQueue(); if (!grid || !start || !goal || !grid[start.y]?.[start.x]?.isPath || !grid[goal.y]?.[goal.x]?.isPath) { return null; } const startKey = `${start.x},${start.y}`; openSet.enqueue(0, startKey); const cameFrom = new Map(); const gScore = new Map(); gScore.set(startKey, 0); const fScore = new Map(); fScore.set(startKey, heuristic(start, goal)); let visitedCount = 0; while (!openSet.isEmpty()) { if (visitedCount > maxCells) { console.warn("A* pathfinding exceeded maxCells limit."); return null; } const currentKey = openSet.dequeue(); const currentCoords = currentKey.split(','); const current = { x: parseInt(currentCoords[0]), y: parseInt(currentCoords[1]) }; if (current.x === goal.x && current.y === goal.y) { const path = []; let tempKey = currentKey; let safety = 0; while (tempKey && safety < (MAZE_WIDTH_CELLS * MAZE_HEIGHT_CELLS)) { const coordsArr = tempKey.split(','); path.push({ x: parseInt(coordsArr[0]), y: parseInt(coordsArr[1]) }); tempKey = cameFrom.get(tempKey); safety++; } if (safety >= (MAZE_WIDTH_CELLS * MAZE_HEIGHT_CELLS)) { console.error("A* Path reconstruction failed (infinite loop suspected)."); return null; } return path.reverse(); } visitedCount++; const currentCell = grid[current.y]?.[current.x]; if (!currentCell || !currentCell.isPath) continue; const neighbors = []; const potentialMoves = [ { dx: 0, dy: -1, wall: 'top'}, { dx: 0, dy: 1,  wall: 'bottom'}, { dx: -1, dy: 0, wall: 'left'}, { dx: 1, dy: 0,  wall: 'right'} ]; for (const move of potentialMoves) { const nx = current.x + move.dx; const ny = current.y + move.dy; if (ny >= 0 && ny < MAZE_HEIGHT_CELLS && nx >= 0 && nx < MAZE_WIDTH_CELLS) { const neighborCell = grid[ny]?.[nx]; if (neighborCell && neighborCell.isPath && !currentCell.walls[move.wall]) { neighbors.push({ x: nx, y: ny }); } } } for (const neighbor of neighbors) { const neighborKey = `${neighbor.x},${neighbor.y}`; const tentativeGScore = (gScore.get(currentKey) || 0) + 1; if (tentativeGScore < (gScore.get(neighborKey) || Infinity)) { cameFrom.set(neighborKey, currentKey); gScore.set(neighborKey, tentativeGScore); const neighborFScore = tentativeGScore + heuristic(neighbor, goal); fScore.set(neighborKey, neighborFScore); openSet.enqueue(neighborFScore, neighborKey); } } } return null; }
+function gridPathToWorldPath(gridPath) { if (!gridPath) return []; return gridPath.map(cell => { const worldPos = gridToWorld(cell.x, cell.y); worldPos.y = AGENT_BODY_HEIGHT * 0.1; return worldPos; }); }
+function findRandomReachableCell() { const maxAttempts = MAZE_WIDTH_CELLS * MAZE_HEIGHT_CELLS; let attempts = 0; let pathExists = false; for (let y = 0; y < MAZE_HEIGHT_CELLS && !pathExists; y++) { for (let x = 0; x < MAZE_WIDTH_CELLS && !pathExists; x++) { if (mazeGrid[y]?.[x]?.isPath) { pathExists = true; } } } if (!pathExists) { console.error("findRandomReachableCell: No cells with isPath=true found!"); return null; } while(attempts < maxAttempts) { const x = Math.floor(Math.random() * MAZE_WIDTH_CELLS); const y = Math.floor(Math.random() * MAZE_HEIGHT_CELLS); const cell = mazeGrid[y]?.[x]; if (cell && cell.isPath === true) { return { x: x, y: y }; } attempts++; } console.warn(`findRandomReachableCell: Random attempts failed. Searching sequentially...`); for (let y = 0; y < MAZE_HEIGHT_CELLS; y++) { for (let x = 0; x < MAZE_WIDTH_CELLS; x++) { const cell = mazeGrid[y]?.[x]; if (cell && cell.isPath === true) { return { x: x, y: y }; } } } console.error("findRandomReachableCell: CRITICAL - Sequential search failed!"); return null; }
 
-        // Create the scene
-        const scene = createScene();
+// =============================================================================
+// Audio Context and Sound Playback
+// =============================================================================
+let audioCtx = null; function initializeAudioContext() { if (!audioCtx && (window.AudioContext || window.webkitAudioContext)) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === 'suspended') { audioCtx.resume().then(() => console.log("AudioContext resumed!")).catch(e => console.error("AudioContext resume failed:", e)); } console.log("AudioContext initialized."); } }
+function playSound(type = 'shoot', volume = 0.3, duration = 0.05) { if (!audioCtx) { return; } if (audioCtx.state === 'suspended') { audioCtx.resume().then(() => { playSoundInternal(type, volume, duration); }).catch(e => console.error("AudioContext resume failed on playSound:", e)); return; } playSoundInternal(type, volume, duration); }
+function playSoundInternal(type, volume, duration) { try { const oscillator = audioCtx.createOscillator(); const gainNode = audioCtx.createGain(); gainNode.gain.setValueAtTime(volume, audioCtx.currentTime); let freq = 440, waveType = 'sine', endFreq = freq; switch(type) { case 'shoot': freq = 660; endFreq = 110; waveType = 'sawtooth'; duration = 0.08; break; case 'reload': freq = 220; endFreq = 180; waveType = 'square'; duration = 0.2; gainNode.gain.linearRampToValueAtTime(volume * 0.5, audioCtx.currentTime + duration * 0.8); break; case 'hit_wall': freq = 150; endFreq = 100; waveType = 'square'; duration = 0.1; volume = 0.2; break; case 'hit_agent': freq = 880; endFreq = 550; waveType = 'triangle'; duration = 0.15; volume = 0.4; break; case 'agent_death': freq = 330; endFreq = 50; waveType = 'sawtooth'; duration = 0.4; volume = 0.5; break; case 'player_hit': freq = 200; endFreq = 150; waveType = 'square'; duration = 0.15; volume = 0.6; break; case 'player_hit_feedback': freq = 1000; endFreq = 1000; waveType = 'sine'; duration = 0.05; volume = 0.15; gainNode.gain.setValueAtTime(volume * 0.5, audioCtx.currentTime + duration * 0.1); break; case 'game_over': freq = 440; endFreq = 110; waveType = 'sawtooth'; duration = 1.5; volume = 0.6; break; case 'game_win': freq = 523; endFreq = 1046; waveType = 'sine'; duration = 1.8; volume = 0.6; break; case 'agent_shoot': freq = 550; endFreq = 220; waveType = 'sawtooth'; duration = 0.1; volume = 0.25; break; case 'melee_hit': freq = 300; endFreq = 200; waveType = 'square'; duration = 0.12; volume = 0.5; break; case 'rabbit_pickup': freq = 880; endFreq = 1760; waveType = 'triangle'; duration = 0.3; volume = 0.45; gainNode.gain.exponentialRampToValueAtTime(volume * 1.5, audioCtx.currentTime + duration * 0.5); break; default: duration = 0.05; break; } oscillator.type = waveType; oscillator.frequency.setValueAtTime(freq, audioCtx.currentTime); oscillator.frequency.exponentialRampToValueAtTime(endFreq > 0 ? endFreq : 0.01, audioCtx.currentTime + duration); gainNode.gain.setValueAtTime(volume, audioCtx.currentTime); gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration); oscillator.connect(gainNode); gainNode.connect(audioCtx.destination); oscillator.start(audioCtx.currentTime); oscillator.stop(audioCtx.currentTime + duration); } catch (e) { console.error("Error playing sound:", e); } }
 
-        // Register a render loop to repeatedly render the scene
-        if (scene) {
-            try {
-                engine.runRenderLoop(function () {
-                    if (scene.activeCamera) { // Ensure camera exists before rendering
-                        scene.render();
-                    } else {
-                        // console.warn("Render loop: No active camera found.");
-                    }
-                });
-                console.log("Render loop started.");
-            } catch (e) {
-                console.error("Error starting render loop:", e);
-            }
+// =============================================================================
+// HUD & Menu Element References & Logic
+// =============================================================================
+let hudHpBarFill = null; let hudWeaponName = null; let hudAmmoCount = null; let hudReloadIndicator = null; let hudReloadProgress = null; let hudAgentCount = null; let blockerElement = null; let instructionsElement = null; let instructionsSpan = null; let menuEffectInterval = null; let damageOverlayElement = null; let versionInfoElement = null; let glitchTitleElement = null; let staticInstructionsElement = null;
+function setupHUD(){ hudHpBarFill=document.getElementById('hpBarFill'); hudWeaponName=document.getElementById('weaponName'); hudAmmoCount=document.getElementById('ammoCount'); hudReloadIndicator=document.getElementById('reloadIndicator'); hudReloadProgress=document.getElementById('reloadProgress'); hudAgentCount=document.getElementById('agentCount'); damageOverlayElement=document.getElementById('damageOverlay'); versionInfoElement = document.getElementById('versionInfo'); blockerElement = blockerElement || document.getElementById('blocker'); instructionsElement = instructionsElement || document.getElementById('instructions'); glitchTitleElement = document.getElementById('glitchTitle'); staticInstructionsElement = document.getElementById('staticInstructions'); if (instructionsElement && !glitchTitleElement) { instructionsSpan = instructionsElement.querySelector('span'); if (instructionsSpan && !instructionsSpan.dataset.initialText ) { instructionsSpan.dataset.initialText = instructionsSpan.innerHTML; } } debugMapCanvas = debugMapCanvas || document.getElementById('debugMapCanvas'); if (debugMapCanvas && !debugMapCtx) { debugMapCtx = debugMapCanvas.getContext('2d'); } if(!hudHpBarFill||!hudWeaponName||!hudAmmoCount||!hudReloadIndicator||!hudReloadProgress||!hudAgentCount||!damageOverlayElement || !versionInfoElement || !blockerElement || !instructionsElement || (!instructionsSpan && (!glitchTitleElement || !staticInstructionsElement)) ) { console.error("CRITICAL: One or more HUD/Overlay/Info/Menu elements missing!"); return false; } hudWeaponName.textContent="9mm"; hudAgentCount.dataset.value = `${STARTING_AGENT_COUNT}`; hudAmmoCount.dataset.value = `${currentAmmo} / ∞`; versionInfoElement.textContent = `v1.47d (BJS)`; updateHUD(); return true; } // Updated version
+function updateHUD(time = 0){ if(hudHpBarFill) { const hpP = Math.max(0, playerHP) / PLAYER_MAX_HP * 100; hudHpBarFill.style.width = `${hpP}%`; if (playerHP > 0) { const baseLightness = 70; const shimmer = Math.sin(time * HUD_HP_BAR_SHIMMER_SPEED) * HUD_HP_BAR_SHIMMER_AMOUNT; hudHpBarFill.style.backgroundColor = `hsl(120, 100%, ${Math.max(30, Math.min(90, baseLightness + shimmer))}%)`; } else { hudHpBarFill.style.backgroundColor = `hsl(120, 100%, 30%)`; } } const locked = isPointerLocked; if(hudAgentCount) { const currentCountText = `${agentsRemaining}`; if (hudAgentCount.dataset.value !== currentCountText || gameOver || gameWon || !locked) { applyGlitchToElement(hudAgentCount, HUD_TEXT_GLITCH_INTENSITY, HUD_TEXT_GLITCH_CHARS, currentCountText); hudAgentCount.dataset.value = currentCountText; } else { if (hudAgentCount.innerHTML !== currentCountText) hudAgentCount.innerHTML = currentCountText; } } if(hudAmmoCount && hudReloadIndicator && hudReloadProgress) { if(isReloading){ const reloadingText = "Reloading..."; if (hudAmmoCount.textContent !== reloadingText) { hudAmmoCount.textContent = reloadingText; } hudAmmoCount.dataset.value = reloadingText; hudReloadIndicator.style.display = 'block'; const p = Math.max(0, (GUN_RELOAD_TIME - reloadTimer) / GUN_RELOAD_TIME) * 100; hudReloadProgress.style.strokeDasharray = `${p} 100`; } else { const ammoText = `${currentAmmo} / ∞`; if (hudAmmoCount.dataset.value !== ammoText || gameOver || gameWon || !locked) { applyGlitchToElement(hudAmmoCount, HUD_TEXT_GLITCH_INTENSITY, HUD_TEXT_GLITCH_CHARS, ammoText); hudAmmoCount.dataset.value = ammoText; } else { if (hudAmmoCount.innerHTML !== ammoText) hudAmmoCount.innerHTML = ammoText; } hudReloadIndicator.style.display = 'none'; hudReloadProgress.style.strokeDasharray = '0 100'; } } }
+function applyGlitchToElement(el, intensity = 0.05, chars = MENU_GLITCH_CHARS, originalText = null) { if (!el) return; let textToGlitch = originalText !== null ? originalText : (el.dataset?.originalText || el.textContent); if (!textToGlitch) return; if (originalText !== null && el.dataset?.originalText !== originalText) { el.dataset.originalText = originalText; } else if (!el.dataset?.originalText) { el.dataset.originalText = textToGlitch; } const len = textToGlitch.length; let result = ''; for (let i = 0; i < len; i++) { if (textToGlitch[i] === '<') { let tagEnd = textToGlitch.indexOf('>', i); if (tagEnd !== -1) { result += textToGlitch.substring(i, tagEnd + 1); i = tagEnd; continue; } } result += (Math.random() < intensity) ? chars[Math.floor(Math.random() * chars.length)] : textToGlitch[i]; } if (el.innerHTML !== result) { el.innerHTML = result; } }
+function applyMenuEffects(){ if(blockerElement && blockerElement.style.display !== 'none' && glitchTitleElement){ applyGlitchToElement(glitchTitleElement, 0.15, MENU_GLITCH_CHARS); } }
+function startMenuEffects(){ if(!menuEffectInterval && glitchTitleElement){ if(!glitchTitleElement.dataset.originalText) { glitchTitleElement.dataset.originalText = glitchTitleElement.innerText; } if (staticInstructionsElement && staticInstructionsElement.dataset.originalText && staticInstructionsElement.innerHTML !== staticInstructionsElement.dataset.originalText) { staticInstructionsElement.innerHTML = staticInstructionsElement.dataset.originalText; } clearInterval(menuEffectInterval); menuEffectInterval = setInterval(applyMenuEffects, 80); } }
+function stopMenuEffects(){ if(menuEffectInterval){ clearInterval(menuEffectInterval); menuEffectInterval=null; if(glitchTitleElement && glitchTitleElement.dataset && glitchTitleElement.dataset.originalText) { glitchTitleElement.innerHTML = glitchTitleElement.dataset.originalText; } if (staticInstructionsElement && staticInstructionsElement.dataset.originalText) { staticInstructionsElement.innerHTML = staticInstructionsElement.dataset.originalText; } } }
+function updateMenuForPause() { stopMenuEffects(); if (glitchTitleElement) glitchTitleElement.innerHTML = `<span style="font-size:36px">Paused</span>`; if (staticInstructionsElement) staticInstructionsElement.innerHTML = `(Click to Resume)`; if (glitchTitleElement) glitchTitleElement.dataset.originalText = glitchTitleElement.innerText; if (staticInstructionsElement) staticInstructionsElement.dataset.originalText = staticInstructionsElement.innerHTML; if(blockerElement) { blockerElement.style.display = 'flex'; void blockerElement.offsetWidth; blockerElement.style.opacity = '1'; } if(instructionsElement) instructionsElement.style.display = 'block'; }
+function updateMenuForRabbitPickup() { stopMenuEffects(); if (glitchTitleElement) glitchTitleElement.innerHTML = `<span style="font-size:28px">Rabbit Collected!</span>`; if (staticInstructionsElement) staticInstructionsElement.innerHTML = `(Map Revealed Briefly)<br/>(Click to Resume)`; if (glitchTitleElement) glitchTitleElement.dataset.originalText = glitchTitleElement.innerText; if (staticInstructionsElement) staticInstructionsElement.dataset.originalText = staticInstructionsElement.innerHTML; if(blockerElement) { blockerElement.style.display = 'flex'; void blockerElement.offsetWidth; blockerElement.style.opacity = '1'; } if(instructionsElement) instructionsElement.style.display = 'block'; }
 
+// =============================================================================
+// Player Actions
+// =============================================================================
+function fireGun() { if (!isPointerLocked || !canShoot || isReloading || gameOver || gameWon) return; if (currentAmmo <= 0) { startReload(); return; } currentAmmo--; canShoot = false; shootTimer = GUN_FIRE_RATE; playSound('shoot'); if (!bulletMaterial_BJS) { bulletMaterial_BJS = new BABYLON.StandardMaterial("bulletMat", scene); bulletMaterial_BJS.diffuseColor = new BABYLON.Color3(0.2, 1, 0.2); bulletMaterial_BJS.emissiveColor = new BABYLON.Color3(0.1, 0.6, 0.1); } const bullet = BABYLON.MeshBuilder.CreateSphere("bullet" + Date.now(), { diameter: BULLET_SIZE, segments: 8 }, scene); bullet.material = bulletMaterial_BJS; bullet.checkCollisions = false; const cameraForward = camera.getForwardRay().direction; const offset = cameraForward.scale(GUN_FORWARD_OFFSET); bullet.position = camera.globalPosition.add(offset); const velocity = cameraForward.scale(BULLET_SPEED); activeBullets.push({ mesh: bullet, velocity: velocity, life: BULLET_LIFESPAN, isAgentBullet: false, damage: 1 }); updateHUD(); }
+function startReload() { if (isReloading || currentAmmo === GUN_CLIP_SIZE || gameOver || gameWon || !isPointerLocked) return; console.log("ACTION: Reloading..."); isReloading = true; reloadTimer = GUN_RELOAD_TIME; canShoot = false; playSound('reload'); updateHUD(); }
+function handleShootingCooldown(delta) { if (!canShoot) { shootTimer -= delta; if (shootTimer <= 0) { canShoot = true; } } }
+function handleReloading(delta, time) { if (isReloading) { reloadTimer -= delta; if (reloadTimer <= 0) { isReloading = false; currentAmmo = GUN_CLIP_SIZE; canShoot = true; console.log("ACTION: Reload Complete."); updateHUD(); } } }
 
-            // Watch for browser/canvas resize events
-            window.addEventListener("resize", function () {
-                if (engine) {
-                    engine.resize();
-                    console.log("Engine resized on window resize.");
-                }
-            });
-        } else {
-            console.error("Scene creation failed, cannot start render loop.");
-        }
-    }
+// =============================================================================
+// Game State Functions
+// =============================================================================
+function damagePlayer(amount, source = "Bullet") { if (gameOver || gameWon || shakeTimer > 0) return; playerHP -= amount; playerHP = Math.max(0, playerHP); console.log(`Player took ${amount} damage from ${source}. HP: ${playerHP}`); playSound('player_hit'); playSound('player_hit_feedback'); if (damageOverlayElement) { damageOverlayElement.style.display = 'block'; requestAnimationFrame(() => { damageOverlayElement.style.opacity = '1'; setTimeout(() => { if (damageOverlayElement) damageOverlayElement.style.opacity = '0'; setTimeout(() => { if (damageOverlayElement && damageOverlayElement.style.opacity === '0') { damageOverlayElement.style.display = 'none'; } }, DAMAGE_OVERLAY_FADE_OUT_TIME); }, DAMAGE_OVERLAY_FADE_IN_TIME); }); } updateHUD(); if (playerHP <= 0) { triggerGameOver(`Eliminated by Agent ${source}`); } }
+function triggerGameOver(reason = "Unknown") { if (gameOver || gameWon) return; console.log(`Game Over: ${reason}`); gameOver = true; playerHP = 0; shakeTimer = 0; updateHUD(); if (blockerElement && instructionsElement) { if (glitchTitleElement) glitchTitleElement.innerHTML = `GAME OVER`; if(staticInstructionsElement) staticInstructionsElement.innerHTML = `${reason}<br/><br/>(Click to Reload)`; if (glitchTitleElement) glitchTitleElement.dataset.originalText = glitchTitleElement.innerText; if (staticInstructionsElement) staticInstructionsElement.dataset.originalText = staticInstructionsElement.innerHTML; } blockerElement.style.opacity = '1'; blockerElement.style.display = 'flex'; instructionsElement.style.display = 'block'; if (isPointerLocked && engine) { engine.exitPointerlock(); } playSound('game_over'); startMenuEffects(); }
+function triggerGameWin() { if (gameOver || gameWon) return; console.log("Objective Complete: Exit Reached!"); gameWon = true; shakeTimer = 0; if (blockerElement && instructionsElement) { if (glitchTitleElement) glitchTitleElement.innerHTML = `EXIT REACHED`; if(staticInstructionsElement) staticInstructionsElement.innerHTML = `OBJECTIVE COMPLETE<br/><br/>(Click to Reload)`; if (glitchTitleElement) glitchTitleElement.dataset.originalText = glitchTitleElement.innerText; if (staticInstructionsElement) staticInstructionsElement.dataset.originalText = staticInstructionsElement.innerHTML; } blockerElement.style.opacity = '1'; blockerElement.style.display = 'flex'; instructionsElement.style.display = 'block'; if (isPointerLocked && engine) { engine.exitPointerlock(); } playSound('game_win'); startMenuEffects(); }
+
+// =============================================================================
+// Debug Map Drawing
+// =============================================================================
+function drawDebugMap(time) { if (!debugMapCtx || !debugMapCanvas) return; const shouldBeVisible = DEBUG_MAP_VISIBLE || mapDisplayTimer > 0; if (shouldBeVisible) { if (!debugMapCanvas.classList.contains('visible')) { debugMapCanvas.classList.add('visible'); } } else { if (debugMapCanvas.classList.contains('visible')) { debugMapCanvas.classList.remove('visible'); } return; } const ctx = debugMapCtx; const canvasSize = DEBUG_MAP_CANVAS_SIZE; ctx.clearRect(0, 0, canvasSize, canvasSize); const gridTotalWidthCells = MAZE_WIDTH_CELLS; const gridTotalHeightCells = MAZE_HEIGHT_CELLS; const scaleX = canvasSize / gridTotalWidthCells; const scaleY = canvasSize / gridTotalHeightCells; const scale = Math.min(scaleX, scaleY); const mazeDrawingWidth = gridTotalWidthCells * scale; const mazeDrawingHeight = gridTotalHeightCells * scale; const offsetX = (canvasSize - mazeDrawingWidth) / 2; const offsetY = (canvasSize - mazeDrawingHeight) / 2; const gridToCanvas = (gridX, gridY) => ({ x: offsetX + gridX * scale, y: offsetY + gridY * scale }); let currentWallColor = DEBUG_MAP_WALL_COLOR; if (Math.random() < DEBUG_MAP_WALL_FLICKER_CHANCE) { currentWallColor = DEBUG_MAP_WALL_FLICKER_COLOR; } ctx.strokeStyle = currentWallColor; ctx.lineWidth = 1.5; ctx.beginPath(); for (let y = 0; y < MAZE_HEIGHT_CELLS; y++) { for (let x = 0; x < MAZE_WIDTH_CELLS; x++) { const cell = mazeGrid[y]?.[x]; if (cell) { const canvasPos = gridToCanvas(x, y); const nextXPos = gridToCanvas(x + 1, y).x; const nextYPos = gridToCanvas(x, y + 1).y; if (cell.walls.top) { ctx.moveTo(canvasPos.x, canvasPos.y); ctx.lineTo(nextXPos, canvasPos.y); } if (cell.walls.left) { ctx.moveTo(canvasPos.x, canvasPos.y); ctx.lineTo(canvasPos.x, nextYPos); } if (y === MAZE_HEIGHT_CELLS - 1 && cell.walls.bottom) { ctx.moveTo(canvasPos.x, nextYPos); ctx.lineTo(nextXPos, nextYPos); } if (x === MAZE_WIDTH_CELLS - 1 && cell.walls.right) { ctx.moveTo(nextXPos, canvasPos.y); ctx.lineTo(nextXPos, nextYPos); } } } } ctx.stroke(); const worldToCanvas = (worldX, worldZ) => { const visualGridWidthTotal = MAZE_WIDTH_CELLS * MAZE_GRID_SCALE; const visualGridHeightTotal = MAZE_HEIGHT_CELLS * MAZE_GRID_SCALE; const visualGridXFloat = (worldX / CELL_SIZE) + (visualGridWidthTotal / 2); const visualGridZFloat = (worldZ / CELL_SIZE) + (visualGridHeightTotal / 2); const logicalGridXFloat = visualGridXFloat / MAZE_GRID_SCALE; const logicalGridYFloat = visualGridZFloat / MAZE_GRID_SCALE; return gridToCanvas(logicalGridXFloat, logicalGridYFloat); }; if (camera) { let currentPlayerColor = DEBUG_MAP_PLAYER_COLOR; if (Math.random() < DEBUG_MAP_ENTITY_FLICKER_CHANCE) { currentPlayerColor = DEBUG_MAP_ENTITY_FLICKER_COLOR; } ctx.fillStyle = currentPlayerColor; ctx.strokeStyle = currentPlayerColor; const playerCanvasPos = worldToCanvas(camera.position.x, camera.position.z); const playerRadius = scale * 0.35; const forward = camera.getForwardRay().direction; const angle = Math.atan2(forward.x, forward.z); ctx.beginPath(); ctx.moveTo(playerCanvasPos.x + Math.sin(angle) * playerRadius, playerCanvasPos.y + Math.cos(angle) * playerRadius); ctx.lineTo(playerCanvasPos.x + Math.sin(angle + Math.PI * 0.8) * playerRadius * 0.7, playerCanvasPos.y + Math.cos(angle + Math.PI * 0.8) * playerRadius * 0.7); ctx.lineTo(playerCanvasPos.x + Math.sin(angle - Math.PI * 0.8) * playerRadius * 0.7, playerCanvasPos.y + Math.cos(angle - Math.PI * 0.8) * playerRadius * 0.7); ctx.closePath(); ctx.fill(); } let currentAgentColor = DEBUG_MAP_AGENT_COLOR; if (Math.random() < DEBUG_MAP_ENTITY_FLICKER_CHANCE) { currentAgentColor = DEBUG_MAP_ENTITY_FLICKER_COLOR; } ctx.fillStyle = currentAgentColor; ctx.strokeStyle = currentAgentColor; const agentRadius = scale * 0.3; agents.forEach(agent => { if (agent.hp > 0 && agent.rootNode) { const agentCanvasPos = worldToCanvas(agent.rootNode.position.x, agent.rootNode.position.z); ctx.beginPath(); ctx.arc(agentCanvasPos.x, agentCanvasPos.y, agentRadius, 0, Math.PI * 2); ctx.fill(); } }); ctx.fillStyle = DEBUG_MAP_RABBIT_COLOR; ctx.strokeStyle = DEBUG_MAP_RABBIT_COLOR; const rabbitRadius = scale * 0.25; activeRabbits.forEach(rabbit => { if (rabbit.rootNode) { const rabbitCanvasPos = worldToCanvas(rabbit.rootNode.position.x, rabbit.rootNode.position.z); ctx.beginPath(); ctx.rect(rabbitCanvasPos.x - rabbitRadius, rabbitCanvasPos.y - rabbitRadius, rabbitRadius * 2, rabbitRadius * 2); ctx.fill(); } }); }
+
+// =============================================================================
+// ===== BABYLON.JS SPECIFIC IMPLEMENTATIONS =====
+// =============================================================================
+
+// =============================================================================
+// Babylon.js Scene Creation Function
+// =============================================================================
+async function createScene() {
+    console.log("BJS: Creating Scene...");
+    scene = new BABYLON.Scene(engine);
+    scene.clearColor = new BABYLON.Color4(0, 0, 0, 1);
+    camera = new BABYLON.UniversalCamera("playerCamera", new BABYLON.Vector3(0, PLAYER_EYE_HEIGHT, 0), scene);
+    camera.speed = PLAYER_SPEED_WALK;
+    camera.inertia = 0.0; // No mouse smoothing/acceleration
+    camera.angularSensibility = BJS_ANGULAR_SENSITIVITY; // Use calculated sensitivity
+    camera.minZ = 0.5; camera.maxZ = MAZE_WIDTH_UNITS * 1.5;
+    camera.upperBetaLimit = Math.PI / 2.1; camera.lowerBetaLimit = -Math.PI / 2.1;
+    scene.collisionsEnabled = true; camera.checkCollisions = true;
+    camera.ellipsoid = new BABYLON.Vector3(PLAYER_RADIUS, PLAYER_COLLISION_HEIGHT / 2, PLAYER_RADIUS);
+    camera.ellipsoidOffset = new BABYLON.Vector3(0, PLAYER_COLLISION_HEIGHT / 2, 0);
+    scene.gravity = new BABYLON.Vector3(0, -9.81 * 2.5, 0); camera.applyGravity = true;
+    const ambientLight = new BABYLON.HemisphericLight("ambientLight", new BABYLON.Vector3(0, 1, 0), scene); ambientLight.intensity = 0.6; ambientLight.groundColor = new BABYLON.Color3(0.2, 0.2, 0.2);
+    playerLight = new BABYLON.PointLight("playerLight", new BABYLON.Vector3(0, 1, 0), scene); playerLight.intensity = 0.8; playerLight.range = 8 * CELL_SIZE * MAZE_GRID_SCALE; playerLight.diffuse = new BABYLON.Color3(0.8, 0.8, 0.7);
+    scene.fogMode = BABYLON.Scene.FOGMODE_LINEAR; scene.fogColor = new BABYLON.Color3(0, 0.01, 0); scene.fogStart = CELL_SIZE * MAZE_GRID_SCALE * 1.5; scene.fogEnd = CELL_SIZE * MAZE_GRID_SCALE * 8;
+    console.log(`BJS: Scene created. Mouse Sensitivity Setting: ${MOUSE_SENSITIVITY_SETTING} -> AngularSensibility: ${BJS_ANGULAR_SENSITIVITY.toFixed(0)}`);
+    return scene;
 }
 
-console.log("End of Minimal Babylon JS Test Script.");
+// =============================================================================
+// Babylon.js Maze Geometry Creation (Implemented)
+// =============================================================================
+function createMazeGeometry_BJS() {
+    // This function should now correctly render the maze geometry.
+    // No changes needed from previous version (v1.46e) unless debugging reveals issues.
+    console.log("BJS: Creating Maze Geometry using Instancing..."); const wallMaterial_BJS = new BABYLON.StandardMaterial("wallMat", scene); wallMaterial_BJS.diffuseColor = new BABYLON.Color3.FromHexString("#999999"); wallMaterial_BJS.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1); wallMaterial_BJS.emissiveColor = new BABYLON.Color3.FromHexString("#202020"); const floorCeilingMaterial_BJS = new BABYLON.StandardMaterial("floorCeilingMat", scene); floorCeilingMaterial_BJS.diffuseColor = new BABYLON.Color3(1, 1, 1); floorCeilingMaterial_BJS.specularColor = new BABYLON.Color3(0, 0, 0); const doorMaterial_BJS = new BABYLON.StandardMaterial("doorMat", scene); doorMaterial_BJS.diffuseColor = new BABYLON.Color3.FromHexString("#006400"); doorMaterial_BJS.emissiveColor = new BABYLON.Color3.FromHexString("#003300"); doorMaterial_BJS.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1); floorMesh_BJS = BABYLON.MeshBuilder.CreateGround("floor", {width: MAZE_WIDTH_UNITS, height: MAZE_HEIGHT_UNITS}, scene); floorMesh_BJS.position.y = 0.01; floorMesh_BJS.material = floorCeilingMaterial_BJS; floorMesh_BJS.checkCollisions = true; ceilingMesh_BJS = BABYLON.MeshBuilder.CreatePlane("ceiling", {width: MAZE_WIDTH_UNITS, height: MAZE_HEIGHT_UNITS}, scene); ceilingMesh_BJS.position.y = WALL_HEIGHT; ceilingMesh_BJS.rotation.x = Math.PI; ceilingMesh_BJS.material = floorCeilingMaterial_BJS; wallMeshFull = BABYLON.MeshBuilder.CreateBox("wallTemplateFull", {width: WALL_THICKNESS, height: WALL_HEIGHT, depth: WALL_THICKNESS}, scene); wallMeshFull.material = wallMaterial_BJS; wallMeshFull.isVisible = false; wallMeshFull.checkCollisions = true; wallMeshShort = BABYLON.MeshBuilder.CreateBox("wallTemplateShort", {width: WALL_THICKNESS, height: WALL_HEIGHT_SHORT, depth: WALL_THICKNESS}, scene); wallMeshShort.material = wallMaterial_BJS; wallMeshShort.isVisible = false; wallMeshShort.checkCollisions = true; doorMeshTemplate = BABYLON.MeshBuilder.CreateBox("doorTemplate", { width: MAZE_GRID_SCALE * CELL_SIZE * DOOR_WIDTH_FACTOR, height: WALL_HEIGHT * DOOR_HEIGHT_FACTOR, depth: DOOR_DEPTH }, scene); doorMeshTemplate.material = doorMaterial_BJS; doorMeshTemplate.isVisible = false; doorMeshTemplate.checkCollisions = true; const fullWallMatrices = []; const shortWallMatrices = []; const doorMatrices = []; const visualGridWidthTotal = MAZE_WIDTH_CELLS * MAZE_GRID_SCALE; const visualGridHeightTotal = MAZE_HEIGHT_CELLS * MAZE_GRID_SCALE; for (let visualGridY = 0; visualGridY < visualGridHeightTotal; visualGridY++) { for (let visualGridX = 0; visualGridX < visualGridWidthTotal; visualGridX++) { const cellX = Math.floor(visualGridX / MAZE_GRID_SCALE); const cellY = Math.floor(visualGridY / MAZE_GRID_SCALE); const cell = mazeGrid[cellY]?.[cellX]; let isVisualWall = false; let isDoorway = false; if (cell) { const relX = visualGridX % MAZE_GRID_SCALE; const relY = visualGridY % MAZE_GRID_SCALE; if (cell.walls.top && relY === 0) isVisualWall = true; else if (cell.walls.bottom && relY === MAZE_GRID_SCALE - 1) isVisualWall = true; else if (cell.walls.left && relX === 0) isVisualWall = true; else if (cell.walls.right && relX === MAZE_GRID_SCALE - 1) isVisualWall = true; else if (cell.isWall && !cell.isPath) isVisualWall = true; const isBorder = cellX === 0 || cellX === MAZE_WIDTH_CELLS - 1 || cellY === 0 || cellY === MAZE_HEIGHT_CELLS - 1; if (!isBorder && isVisualWall) { if (relX === MAZE_GRID_SCALE - 1 && Math.abs(relY - (MAZE_GRID_SCALE - 1) / 2) < 1) { if (cell.isPath && cellX < MAZE_WIDTH_CELLS - 1 && mazeGrid[cellY]?.[cellX + 1]?.isPath && !cell.walls.right) { isDoorway = true; isVisualWall = false; const worldPos = visualGridToWorldPos(visualGridX, visualGridY); const matrix = BABYLON.Matrix.RotationYawPitchRoll(Math.PI / 2, 0, 0).multiply(BABYLON.Matrix.Translation(worldPos.x, WALL_HEIGHT * DOOR_HEIGHT_FACTOR / 2, worldPos.z)); doorMatrices.push(matrix); } } else if (relY === MAZE_GRID_SCALE - 1 && Math.abs(relX - (MAZE_GRID_SCALE - 1) / 2) < 1) { if (cell.isPath && cellY < MAZE_HEIGHT_CELLS - 1 && mazeGrid[cellY + 1]?.[cellX]?.isPath && !cell.walls.bottom) { isDoorway = true; isVisualWall = false; const worldPos = visualGridToWorldPos(visualGridX, visualGridY); const matrix = BABYLON.Matrix.RotationYawPitchRoll(0, 0, 0).multiply(BABYLON.Matrix.Translation(worldPos.x, WALL_HEIGHT * DOOR_HEIGHT_FACTOR / 2, worldPos.z)); doorMatrices.push(matrix); } } } } else { isVisualWall = true; } if (isVisualWall && !isDoorway) { const isBorder = cellX === 0 || cellX === MAZE_WIDTH_CELLS - 1 || cellY === 0 || cellY === MAZE_HEIGHT_CELLS - 1; let isShort = !isBorder && Math.random() < SHORT_WALL_CHANCE; const wallHeight = isShort ? WALL_HEIGHT_SHORT : WALL_HEIGHT; const worldPos = visualGridToWorldPos(visualGridX, visualGridY); const matrix = BABYLON.Matrix.Translation(worldPos.x, wallHeight / 2, worldPos.z); if (isShort) { shortWallMatrices.push(matrix); } else { fullWallMatrices.push(matrix); } } } } console.log(`Creating ${fullWallMatrices.length} full wall instances...`); if (fullWallMatrices.length > 0) wallMeshFull.thinInstanceAdd(fullWallMatrices); console.log(`Creating ${shortWallMatrices.length} short wall instances...`); if (shortWallMatrices.length > 0) wallMeshShort.thinInstanceAdd(shortWallMatrices); console.log(`Creating ${doorMatrices.length} door instances...`); if (doorMatrices.length > 0) doorMeshTemplate.thinInstanceAdd(doorMatrices); console.log("BJS: Maze geometry instancing complete.");
+}
+
+// =============================================================================
+// Player Start Position
+// =============================================================================
+function findLongestCorridorAndSetPlayerStart_BJS() { let longestCorridor = { start: null, end: null, length: 0, orientation: null }; for (let y = 0; y < MAZE_HEIGHT_CELLS; y++) { for (let x = 0; x < MAZE_WIDTH_CELLS; x++) { const isWallLeft = x === 0 || !mazeGrid[y]?.[x - 1]?.isPath; if (mazeGrid[y]?.[x]?.isPath && isWallLeft) { let currentLength = 0; let currentX = x; while (currentX < MAZE_WIDTH_CELLS && mazeGrid[y]?.[currentX]?.isPath) { currentLength++; currentX++; } if (currentLength > longestCorridor.length) { longestCorridor = { start: { x: x, y: y }, end: { x: currentX - 1, y: y }, length: currentLength, orientation: 'horizontal' }; } } } } for (let x = 0; x < MAZE_WIDTH_CELLS; x++) { for (let y = 0; y < MAZE_HEIGHT_CELLS; y++) { const isWallAbove = y === 0 || !mazeGrid[y - 1]?.[x]?.isPath; if (mazeGrid[y]?.[x]?.isPath && isWallAbove) { let currentLength = 0; let currentY = y; while (currentY < MAZE_HEIGHT_CELLS && mazeGrid[currentY]?.[x]?.isPath) { currentLength++; currentY++; } if (currentLength > longestCorridor.length) { longestCorridor = { start: { x: x, y: y }, end: { x: x, y: currentY - 1 }, length: currentLength, orientation: 'vertical' }; } } } } let startWorldPos = gridToWorld(1, 1); let targetWorldPos = gridToWorld(1, 2); if (longestCorridor.length > 1) { const useStartAsPlayer = Math.random() < 0.5; const startGridPos = useStartAsPlayer ? longestCorridor.start : longestCorridor.end; const targetGridPos = useStartAsPlayer ? longestCorridor.end : longestCorridor.start; startWorldPos = gridToWorld(startGridPos.x, startGridPos.y); targetWorldPos = gridToWorld(targetGridPos.x, targetGridPos.y); } else { console.warn("Could not find a suitable longest corridor, using default start (1,1)"); } camera.position = new BABYLON.Vector3(startWorldPos.x, PLAYER_EYE_HEIGHT, startWorldPos.z); camera.setTarget(new BABYLON.Vector3(targetWorldPos.x, PLAYER_EYE_HEIGHT, targetWorldPos.z)); playerPosition.copyFrom(camera.position); console.log(`BJS: Player start position set to ${camera.position.x.toFixed(1)}, ${camera.position.z.toFixed(1)}`); }
+
+// =============================================================================
+// Agent/Rabbit/Exit/Gun Creation
+// =============================================================================
+function createAgents_BJS() { console.log(`BJS: Creating ${STARTING_AGENT_COUNT} agents...`); const agentBodyMaterial = new BABYLON.StandardMaterial("agentBodyMat", scene); agentBodyMaterial.diffuseColor = new BABYLON.Color3.FromHexString("#111111"); agentBodyMaterial.specularColor = new BABYLON.Color3(0.2, 0.2, 0.2); const agentHeadMaterial = new BABYLON.StandardMaterial("agentHeadMat", scene); agentHeadMaterial.diffuseColor = new BABYLON.Color3.FromHexString("#BC8F8F"); agentHeadMaterial.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1); const pStartCell = worldToGrid(camera.position.x, camera.position.z); for(let i = 0; i < STARTING_AGENT_COUNT; i++) { let spawnGridPos = null; let attempts = 0; const maxAttempts = 50; while (!spawnGridPos && attempts < maxAttempts) { const potentialCell = findRandomReachableCell(); if (potentialCell) { const distSq = (potentialCell.x - pStartCell.x)**2 + (potentialCell.y - pStartCell.y)**2; const minDistSq = 9; if (!(potentialCell.x === pStartCell.x && potentialCell.y === pStartCell.y) && distSq > minDistSq) { spawnGridPos = potentialCell; } } attempts++; } if (!spawnGridPos) { console.warn(`Agent ${i} random placement failed, using fallback.`); spawnGridPos = findRandomReachableCell() || {x: MAZE_WIDTH_CELLS - 2, y: MAZE_HEIGHT_CELLS - 2}; } const startWorld = gridToWorld(spawnGridPos.x, spawnGridPos.y); const agentRoot = new BABYLON.TransformNode(`agent_${i}_root`, scene); agentRoot.position = new BABYLON.Vector3(startWorld.x, 0, startWorld.z); agentRoot.rotationQuaternion = new BABYLON.Quaternion(); const body = BABYLON.MeshBuilder.CreateBox(`agent_${i}_body`, { width: AGENT_BODY_WIDTH, height: AGENT_BODY_HEIGHT, depth: AGENT_BODY_WIDTH * AGENT_BODY_DEPTH_FACTOR }, scene); if (agentBodyMaterial) body.material = agentBodyMaterial; body.position.y = AGENT_BODY_HEIGHT / 2; body.parent = agentRoot; const head = BABYLON.MeshBuilder.CreateBox(`agent_${i}_head`, { size: AGENT_HEAD_SIZE }, scene); if (agentHeadMaterial) head.material = agentHeadMaterial; head.position.y = AGENT_BODY_HEIGHT + AGENT_HEAD_SIZE / 2; head.parent = agentRoot; const agentData = { id: `Agent ${i}`, hp: AGENT_HP, rootNode: agentRoot, bodyMesh: body, headMesh: head, gridX: spawnGridPos.x, gridY: spawnGridPos.y, state: 'patrolling', hitTimer: 0, pathToTarget: [], currentPathIndex: -1, currentWaypoint: null, targetGridPos: {x: spawnGridPos.x, y: spawnGridPos.y}, timeSinceLastMove: 0, canSeePlayer: false, timeSincePlayerSeen: 0, lastKnownPlayerPos: new BABYLON.Vector3(), shootCooldownTimer: 0, meleeCooldownTimer: 0, losCheckTimer: Math.random() * AGENT_LOS_CHECK_INTERVAL, searchTimer: 0, targetCellRecalcTimer: 0, meleeBurstCount: 0, meleeBurstIntervalTimer: 0, stuckLogTimer: 0, currentTargetRotation: agentRoot.rotationQuaternion.clone() }; agents.push(agentData); console.log(`   Agent ${i} spawned at grid (${spawnGridPos.x}, ${spawnGridPos.y})`); } agentsRemaining = agents.length; updateHUD(); console.log("BJS: Agent creation finished."); }
+function spawnRabbit_BJS() { if(activeRabbits.length >= MAX_RABBITS) return; const spawnGridPos = findRandomReachableCell(); if (!spawnGridPos) { console.error("spawnRabbit: Could not find valid spawn cell!"); return; } const spawnWorldPos = gridToWorld(spawnGridPos.x, spawnGridPos.y); const rabbitRoot = new BABYLON.TransformNode(`rabbit_${activeRabbits.length}_root`, scene); rabbitRoot.position = new BABYLON.Vector3(spawnWorldPos.x, RABBIT_GROUND_LEVEL, spawnWorldPos.z); rabbitRoot.scaling.setAll(RABBIT_INSTANCE_SCALE); const rabbitMaterial_BJS = new BABYLON.StandardMaterial("rabbitMat" + activeRabbits.length, scene); rabbitMaterial_BJS.diffuseColor = RABBIT_COLOR_WHITE.clone(); rabbitMaterial_BJS.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1); const body = BABYLON.MeshBuilder.CreateCylinder(`rabbit_${activeRabbits.length}_body`, { diameter: RABBIT_BODY_RADIUS * 2, height: RABBIT_BODY_HEIGHT }, scene); body.material = rabbitMaterial_BJS; body.position.y = RABBIT_BODY_HEIGHT / 2; body.parent = rabbitRoot; const head = BABYLON.MeshBuilder.CreateSphere(`rabbit_${activeRabbits.length}_head`, { diameter: RABBIT_HEAD_RADIUS * 2 }, scene); head.material = rabbitMaterial_BJS; head.position.y = RABBIT_BODY_HEIGHT + RABBIT_HEAD_RADIUS * 0.9; head.parent = rabbitRoot; const rabbitData = { id: rabbitRoot.name, rootNode: rabbitRoot, bodyMesh: body, headMesh: head, material: rabbitMaterial_BJS, pulseFreq: Math.random() * 1.5 + 0.5 }; activeRabbits.push(rabbitData); }
+function createGun_BJS() { console.log("BJS: Creating Gun..."); if (gunGroup_BJS) { gunGroup_BJS.dispose(false, true); } gunGroup_BJS = new BABYLON.TransformNode("gunGroup", scene); gunGroup_BJS.parent = camera; gunGroup_BJS.position = new BABYLON.Vector3(GUN_RIGHT_OFFSET, GUN_DOWN_OFFSET, GUN_FORWARD_OFFSET); const gunMaterial = new BABYLON.StandardMaterial("gunMat", scene); gunMaterial.diffuseColor = new BABYLON.Color3.FromHexString("#222222"); gunMaterial.specularColor = new BABYLON.Color3(0.3, 0.3, 0.3); const barrel = BABYLON.MeshBuilder.CreateCylinder("gunBarrel", { height: GUN_BARREL_LENGTH, diameter: GUN_BARREL_RADIUS * 2, tessellation: 12 }, scene); barrel.material = gunMaterial; barrel.rotation.x = Math.PI / 2; barrel.position.z = GUN_BARREL_LENGTH / 2; barrel.parent = gunGroup_BJS; const handle = BABYLON.MeshBuilder.CreateBox("gunHandle", { width: GUN_HANDLE_WIDTH, height: GUN_HANDLE_HEIGHT, depth: GUN_HANDLE_DEPTH }, scene); handle.material = gunMaterial; handle.position.y = -GUN_HANDLE_HEIGHT / 2 - GUN_BARREL_RADIUS * 0.5; handle.position.z = -GUN_BARREL_LENGTH * 0.2; handle.parent = gunGroup_BJS; console.log("BJS: Gun created and attached to camera."); }
+function createExitMarker_BJS(position) { console.warn("BJS: Exit marker creation NOT YET IMPLEMENTED!"); }
+
+// =============================================================================
+// Update Functions (Agent Pathfinding Disabled)
+// =============================================================================
+function updateBullets_BJS(delta) { for (let i = activeBullets.length - 1; i >= 0; i--) { const bulletData = activeBullets[i]; const bulletMesh = bulletData.mesh; const velocity = bulletData.velocity; bulletMesh.position.addInPlace(velocity.scale(delta)); bulletData.life -= delta; if (bulletData.life <= 0) { bulletMesh.dispose(); activeBullets.splice(i, 1); continue; } } }
+
+function updateAgents_BJS(delta, time) {
+    // *** Agent pathfinding and movement are temporarily disabled to avoid A* errors ***
+    // Agents will currently stand still.
+    /*
+    if (!agents.length || !scene) return;
+    agents.forEach(agent => {
+        if (!agent || agent.hp <= 0 || !agent.rootNode) return;
+        const agentPos = agent.rootNode.position;
+        agent.stuckLogTimer -= delta;
+        const currentState = agent.state; let nextState = currentState;
+        let needsPathUpdate = false;
+        if (agent.state === 'patrolling' && (!agent.pathToTarget || agent.pathToTarget.length === 0 || agent.currentPathIndex === -1)) {
+            needsPathUpdate = true;
+        }
+        if (needsPathUpdate) {
+             // This call can cause infinite loops right now
+             // generateNewPatrolPath_BJS(agent);
+             agent.timeSinceLastMove = 0;
+        }
+        let isMoving = false; const agentSpeed = AGENT_SPEED_PATROL;
+        // Movement logic... (currently skipped)
+    });
+    */
+}
+
+function generateNewPatrolPath_BJS(agent) { /* Currently disabled */ }
+function generatePathToTarget_BJS(agent, targetGridX, targetGridY) { /* Currently disabled */ }
+function updateRabbits_BJS(delta, time) { rabbitSpawnTimer -= delta; if(rabbitSpawnTimer <= 0){ spawnRabbit_BJS(); rabbitSpawnTimer = RABBIT_SPAWN_INTERVAL; } }
+
+// =============================================================================
+// Event Handlers (Corrected Control Attachment)
+// =============================================================================
+function setupEventListeners() {
+    console.log("BJS: Setting up Event Listeners...");
+    if (instructionsElement) { instructionsElement.addEventListener('click', () => { if (!isPointerLocked && !gameOver && !gameWon) { initializeAudioContext(); console.log("Instructions clicked: Requesting pointer lock via engine..."); if (engine) engine.enterPointerlock(); } else if (gameOver || gameWon) { window.location.reload(); } }); } else { console.error("Cannot find instructions element!"); }
+    scene.onPointerDown = (evt) => { if (evt.button === 0 && isPointerLocked) { fireGun(); } };
+    const onPointerLockChange = () => { const element = document.pointerLockElement || document.mozPointerLockElement || document.webkitPointerLockElement || null; if (element === canvas) { if (!isPointerLocked) { isPointerLocked = true; console.log("BJS: Pointer Locked"); if (camera && !camera._inputsAttached) { // Check internal flag if available
+                    camera.attachControl(canvas, true); console.log("Camera controls attached."); } if(blockerElement) { blockerElement.style.opacity = '0'; setTimeout(() => { if(blockerElement) blockerElement.style.display = 'none'; }, 300); } document.body.classList.add('locked'); stopMenuEffects(); isMenuDisplayedForRabbit = false; menuDisplayTimer = 0; } } else { if (isPointerLocked) { isPointerLocked = false; console.log("BJS: Pointer Unlocked"); if (camera) { camera.detachControl(); console.log("Camera controls detached."); } document.body.classList.remove('locked'); if (gameOver || gameWon) {} else if (isMenuDisplayedForRabbit && menuDisplayTimer > 0) { updateMenuForRabbitPickup(); } else { updateMenuForPause(); } } } };
+    document.addEventListener("pointerlockchange", onPointerLockChange, false); document.addEventListener("mozpointerlockchange", onPointerLockChange, false); document.addEventListener("webkitpointerlockchange", onPointerLockChange, false);
+    // Keyboard observable remains to handle Shift and custom keys, WASD handled by camera.inputs
+    const keyMap = {}; scene.onKeyboardObservable.add((kbInfo) => { const isDown = kbInfo.type === BABYLON.KeyboardEventTypes.KEYDOWN; const key = kbInfo.event.code; keyMap[key] = isDown; if (isDown) { onKeyDown_BJS(key); } const shiftPressed = keyMap['ShiftLeft'] || keyMap['ShiftRight'] || false; if (camera) { if (isPointerLocked) { camera.speed = shiftPressed ? PLAYER_SPEED_RUN : PLAYER_SPEED_WALK; isRunning = shiftPressed; } else { isRunning = false; camera.speed = PLAYER_SPEED_WALK; } } });
+    window.addEventListener("resize", () => { if (engine) { engine.resize(); } });
+    console.log("BJS: Event Listeners Setup Complete.");
+}
+function onKeyDown_BJS(keyCode) { const allowDebugInput = ['KeyP', 'KeyM', 'KeyL', 'KeyK', 'Digit1', 'Digit2', 'Digit3', 'Digit4'].includes(keyCode); const allowGameInput = isPointerLocked && menuDisplayTimer <= 0 && mapDisplayTimer <= 0; if (allowGameInput) { switch (keyCode) { case 'KeyR': startReload(); break; } } if (allowDebugInput) { switch (keyCode) { case 'KeyP': DEBUG_COLLISION = !DEBUG_COLLISION; console.log(`Collision Debug: ${DEBUG_COLLISION?'ON':'OFF'}`); if(scene.debugLayer) { if (scene.debugLayer.isVisible()) { scene.debugLayer.hide(); } if (DEBUG_COLLISION) { scene.debugLayer.show({ embedMode: true, showCollisionMeshes: true }).catch(e => console.error("Error showing debug layer:", e)); } } else if(DEBUG_COLLISION) { console.warn("Debug layer not available/initialized yet."); } break; case 'KeyM': DEBUG_MAP_VISIBLE = !DEBUG_MAP_VISIBLE; console.log(`Map Always On: ${DEBUG_MAP_VISIBLE?'ON':'OFF'}`); break; case 'KeyL': DEBUG_MOVEMENT = !DEBUG_MOVEMENT; console.log(`Movement Debug: ${DEBUG_MOVEMENT?'ON':'OFF'}`); break; case 'KeyK': DEBUG_AGENT = !DEBUG_AGENT; console.log(`Agent Debug: ${DEBUG_AGENT?'ON':'OFF'}`); break; case 'Digit1': if (debugMapCanvas) { debugMapCanvas.className = 'map-top-left'; if(DEBUG_MAP_VISIBLE || mapDisplayTimer > 0) debugMapCanvas.classList.add('visible'); } break; case 'Digit2': if (debugMapCanvas) { debugMapCanvas.className = 'map-top-right'; if(DEBUG_MAP_VISIBLE || mapDisplayTimer > 0) debugMapCanvas.classList.add('visible');} break; case 'Digit3': if (debugMapCanvas) { debugMapCanvas.className = 'map-bottom-left'; if(DEBUG_MAP_VISIBLE || mapDisplayTimer > 0) debugMapCanvas.classList.add('visible');} break; case 'Digit4': if (debugMapCanvas) { debugMapCanvas.className = 'map-bottom-right'; if(DEBUG_MAP_VISIBLE || mapDisplayTimer > 0) debugMapCanvas.classList.add('visible');} break; } } }
+
+// =============================================================================
+// Main Initialization Function (Babylon.js)
+// =============================================================================
+async function init_BJS() {
+    console.log(`--- INIT BJS: Starting initialization (v1.47d) ---`); // Updated version
+    canvas = document.getElementById("mazeCanvas"); if (!canvas) { console.error("CRITICAL: Canvas element not found!"); return; }
+    engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true }); if (!engine) throw 'Engine should not be null.';
+    engine.displayLoadingUI();
+
+    scene = await createScene(); if (!scene) { console.error("CRITICAL: Scene creation failed!"); engine.hideLoadingUI(); return; }
+    if (!setupHUD()) { console.error("CRITICAL: HUD setup failed."); engine.hideLoadingUI(); return; }
+
+    initMazeGrid(); const startGenCell = mazeGrid[1]?.[1] || mazeGrid[0]?.[0]; if (!startGenCell) { console.error("CRITICAL: Cannot find valid start cell!"); engine.hideLoadingUI(); return; }
+    generateMaze(startGenCell);
+    // *** Re-enable cross connections (assuming A* fix works) ***
+    addCrossConnections(CROSS_CONNECTION_CHANCE);
+    // console.log("Cross connections re-enabled.");
+
+    createMazeGeometry_BJS();
+    findLongestCorridorAndSetPlayerStart_BJS();
+    createAgents_BJS(); createGun_BJS();
+    for (let i = 0; i < INITIAL_RABBIT_SPAWN_COUNT; i++) { spawnRabbit_BJS(); }
+
+    setupEventListeners();
+    engine.hideLoadingUI();
+
+    console.log("INIT BJS: Starting Render Loop...");
+    engine.runRenderLoop(() => {
+        if (!scene || !scene.activeCamera) return;
+        const delta = engine.getDeltaTime() / 1000.0; const time = performance.now() / 1000.0;
+
+        if (menuDisplayTimer > 0) { menuDisplayTimer -= delta; if (menuDisplayTimer <= 0) { menuDisplayTimer = 0; isMenuDisplayedForRabbit = false; if (!isPointerLocked && !gameOver && !gameWon) { updateMenuForPause(); } } }
+        if (mapDisplayTimer > 0) { mapDisplayTimer -= delta; if (mapDisplayTimer <= 0) { mapDisplayTimer = 0; DEBUG_MAP_VISIBLE = false; } }
+
+        if (isPointerLocked && !gameOver && !gameWon) {
+            playerPosition.copyFrom(camera.position); if (playerLight) { playerLight.position.copyFrom(camera.position); }
+            handleShootingCooldown(delta); handleReloading(delta, time);
+            updateBullets_BJS(delta);
+             // *** Agent pathfinding still disabled ***
+             // updateAgents_BJS(delta, time);
+            updateRabbits_BJS(delta, time);
+        }
+
+        updateHUD(time); drawDebugMap(time);
+        try { scene.render(); } catch (e) { console.error("Render loop error:", e); engine.stopRenderLoop(); triggerGameOver("Render Error"); }
+    });
+
+    if (!gameOver && !gameWon) { const initialTitle = `<span id="glitchTitle" style="font-size:36px; display: inline-block;">[ENTER BACKROOMS]</span>`; const initialInstructions = `<span id="staticInstructions" style="font-size: 14px; display: block; margin-top: 15px;">(W, A, S, D = Move, MOUSE = Look, SHIFT = Run, CLICK = Fire, R = Reload)<br/>(P = Collision Debug, M = Map Debug)<br/><br/>THEY KNOW YOU'RE HERE :: Collect the Rabbits :: Destroy Agents</span>`; if (instructionsElement) { instructionsElement.innerHTML = initialTitle + "<br/>" + initialInstructions; glitchTitleElement = document.getElementById('glitchTitle'); staticInstructionsElement = document.getElementById('staticInstructions'); if(glitchTitleElement) glitchTitleElement.dataset.originalText = glitchTitleElement.innerText; if(staticInstructionsElement) staticInstructionsElement.dataset.originalText = staticInstructionsElement.innerHTML; } if(blockerElement) blockerElement.style.display = 'flex'; startMenuEffects(); }
+    console.log("--- DEBUG TOGGLES --- P: Collision | M: Map | L: Movement Logs | K: Agent Logs ---"); console.log(`Matrix Maze Initialized (Babylon.js v1.47d). Click screen to start.`); console.log("--- INIT BJS: Finished ---");
+}
+
+// =============================================================================
+// Start the Babylon.js Initialization Process
+// =============================================================================
+window.addEventListener('DOMContentLoaded', () => { init_BJS().catch(e => { console.error("Error during initialization:", e); engine?.hideLoadingUI(); const instructionsSpan = document.querySelector('#instructions span'); if (instructionsSpan) { instructionsSpan.innerHTML = "INIT FAILED<br/>Check Console (F12)"; instructionsSpan.style.color = "red"; document.getElementById('blocker').style.display = 'flex'; } else { alert("Initialization Failed! Check Console (F12)"); } }); });

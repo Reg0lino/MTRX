@@ -1,0 +1,215 @@
+/* styles/main.css */
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background-color: #000;
+    font-family: 'Consolas', 'Lucida Console', 'Courier New', monospace;
+    color: #0f0;
+}
+
+#mazeCanvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+#blocker {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 10, 0, .85); /* Darker, slightly more opaque */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+    transition: background-color .3s, opacity .3s;
+    opacity: 1; /* Ensure it starts visible */
+}
+
+#instructions {
+    width: 80%;
+    max-width: 500px;
+    padding: 25px; /* More padding */
+    text-align: center;
+    /* font-size: 14px; // Controlled by spans now */
+    cursor: pointer;
+    background-color: rgba(0, 5, 0, .9); /* Darker background */
+    border: 1px solid hsl(120, 65%, 20%); /* Thinner border */
+    color: hsl(120, 90%, 75%);
+    transition: color .1s, text-shadow .1s;
+    text-shadow: 0 0 4px hsl(120, 90%, 50%);
+    box-shadow: inset 0 0 10px rgba(0, 40, 0, 0.7); /* Inner shadow */
+    border-radius: 2px;
+}
+
+body.locked {
+    cursor: none;
+}
+
+#reticle {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #0f0; /* Brighter base */
+    font-size: 22px; /* Slightly larger */
+    font-weight: 700;
+    text-shadow: 0 0 6px #0f0, 0 0 10px #0f0; /* Stronger glow */
+    pointer-events: none;
+    z-index: 9;
+    display: none;
+}
+
+body.locked #reticle {
+    display: block;
+}
+
+/* --- General HUD Styling --- */
+.hud-base {
+    position: fixed;
+    z-index: 5;
+    pointer-events: none;
+    color: #0f0;
+    font-size: calc(16px * 1.4); /* Adjusted base size */
+    text-shadow: 0 0 4px #0f0;
+}
+
+/* --- Matrix Box Styling (for Ammo and Agents) --- */
+.matrix-box {
+    background-color: rgba(0, 8, 0, .80); /* Slightly adjusted background */
+    padding: 8px 15px; /* Adjusted padding */
+    border: 1px solid rgba(0, 255, 0, .3); /* Dimmer border */
+    border-radius: 2px; /* Sharper corners */
+    box-shadow: 0 0 5px rgba(0, 255, 0, 0.3), inset 0 0 8px rgba(0, 30, 0, 0.7); /* Adjusted glow/shadow */
+    display: flex;
+    align-items: center;
+}
+
+.matrix-box .hud-label {
+    margin-right: 10px; /* Adjusted spacing */
+    font-weight: normal; /* Lighter weight */
+    color: hsl(120, 70%, 45%); /* Dimmer label color */
+    text-shadow: 0 0 3px hsl(120, 70%, 30%);
+}
+.matrix-box .hud-value {
+    font-weight: 700;
+    color: hsl(120, 90%, 75%); /* Brighter value */
+    text-shadow: 0 0 5px hsl(120, 90%, 50%);
+}
+
+/* --- HP Bar (Bottom Center) --- */
+#hpContainer {
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    /* Apply matrix box styling */
+    background-color: rgba(0, 8, 0, .80);
+    padding: 8px 15px;
+    border: 1px solid rgba(0, 255, 0, .3);
+    border-radius: 2px;
+    box-shadow: 0 0 5px rgba(0, 255, 0, 0.3), inset 0 0 8px rgba(0, 30, 0, 0.7);
+    display: flex;
+    align-items: center;
+}
+#hpContainer .hud-label {
+     margin-right: 10px;
+     font-weight: normal;
+     color: hsl(120, 70%, 45%);
+     text-shadow: 0 0 3px hsl(120, 70%, 30%);
+}
+#hpBarOuter {
+    width: 280px; /* Adjusted width */
+    height: 16px; /* Adjusted height */
+    border: 1px solid hsl(120, 65%, 20%); /* Darker border */
+    background-color: rgba(0, 0, 0, 0.7);
+    margin-left: 8px;
+    overflow: hidden;
+    border-radius: 1px; /* Sharper */
+    box-shadow: inset 0 0 4px rgba(0,0,0,0.8); /* Stronger inner shadow */
+}
+#hpBarFill {
+    width: 100%; /* Controlled by JS */
+    height: 100%;
+    /* Background color is set by JS for shimmer */
+    /* background-color: hsl(120, 100%, 70%); */
+    transition: width .3s ease-out;
+    box-shadow: 0 0 5px hsl(120, 100%, 50%); /* Glow for the fill */
+}
+
+/* --- Ammo Display (Bottom Left) --- */
+#ammoHud {
+    bottom: 20px;
+    left: 20px;
+}
+#ammoCount {
+    margin-left: 10px; /* Adjusted */
+    min-width: 80px; /* Adjusted */
+    text-align: right;
+    color: hsl(120, 90%, 75%); /* Match matrix value color */
+    text-shadow: 0 0 5px hsl(120, 90%, 50%);
+}
+#weaponName {
+     color: hsl(120, 70%, 45%); /* Match matrix label color */
+     text-shadow: 0 0 3px hsl(120, 70%, 30%);
+}
+#reloadIndicator {
+    width: 30px; /* Smaller */
+    height: 30px;
+    margin-left: 12px; /* Adjusted */
+    display: none;
+    filter: drop-shadow(0 0 3px hsl(120, 90%, 50%)); /* Brighter glow */
+}
+/* Reload SVG styles - adjust stroke width for smaller size */
+.reload-svg { transform: rotate(-90deg); }
+.reload-bg { fill: none; stroke: hsla(120, 90%, 50%, 0.2); stroke-width: 3.8; } /* Adjusted */
+.reload-progress { fill: none; stroke: hsl(120, 90%, 75%); stroke-linecap: round; stroke-width: 3.2; transition: stroke-dasharray .1s linear; } /* Adjusted */
+
+/* --- Agent Counter (Top Right) --- */
+#agentHud {
+     top: 20px;
+     right: 20px;
+}
+#agentCount {
+    color: hsl(120, 90%, 75%); /* Match matrix value color */
+    text-shadow: 0 0 5px hsl(120, 90%, 50%);
+    min-width: 30px; /* Adjusted */
+    text-align: right;
+}
+
+/* --- Debug Map Styles --- */
+#debugMapCanvas {
+    position: fixed;
+    /* Position is set by corner classes */
+    width: 400px; /* Larger */
+    height: 400px; /* Larger */
+    background-color: transparent; /* *** TRANSPARENT BACKGROUND *** */
+    border: none; /* *** NO BORDER *** */
+    z-index: 12;
+    pointer-events: none;
+    /* Default state: hidden */
+    opacity: 0;
+    visibility: hidden;
+    /* Restore simplified transitions */
+    transition: opacity 0.5s ease-in-out,
+                top 0.3s ease-out,
+                bottom 0.3s ease-out,
+                left 0.3s ease-out,
+                right 0.3s ease-out;
+}
+
+/* Corner classes with 20px offset */
+#debugMapCanvas.map-top-right { top: 20px; right: 20px; bottom: auto; left: auto; }
+#debugMapCanvas.map-top-left { top: 20px; left: 20px; bottom: auto; right: auto; }
+#debugMapCanvas.map-bottom-right { bottom: 20px; right: 20px; top: auto; left: auto; }
+#debugMapCanvas.map-bottom-left { bottom: 20px; left: 20px; top: auto; right: auto; }
+
+/* Visible state - lines inside control translucency */
+#debugMapCanvas.visible { opacity: 0.8; visibility: visible; }
+
+/* --- Version Info --- */
+#versionInfo { position: absolute; top: 5px; right: 10px; color: hsl(120, 70%, 35%); font-size: 11px; z-index: 11; pointer-events: none; }
+
+/* --- Damage Overlay --- */
+#damageOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: repeating-linear-gradient( to bottom, hsla(0, 100%, 50%, 0.4), hsla(0, 100%, 50%, 0.4) 1px, transparent 1px, transparent 3px ); z-index: 6; pointer-events: none; opacity: 0; transition: opacity 0.08s linear; display: none; }

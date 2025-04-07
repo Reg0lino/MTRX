@@ -1,2 +1,0 @@
-    @echo off
-    C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "Start-Process 'C:\Program Files\Git\git-bash.exe' -ArgumentList '--cd=C:\Users\nw528\Downloads\MTRX_CrypType_v1.0\matrix-effect\maze-bab'"
