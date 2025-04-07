@@ -1,6 +1,2 @@
-<<<<<<< HEAD
 @echo off
-=======
-@echo off
->>>>>>> f58c96685c6ff706f2a2b5463b0436d78c64a944
 C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command "Start-Process 'C:\Program Files\Git\git-bash.exe' -ArgumentList '-c ""cd /c/Users/nw528/Downloads/MTRX_CrypType_v1.0/matrix-effect/maze-bab && chmod +x ./easy_github_update.sh && ./easy_github_update.sh""'" 
