@@ -1,10 +1,11 @@
-# ███╗   ███╗████████╗██████╗ ██╗  ██╗
-# ████╗ ████║╚══██╔══╝██╔══██╗╚██╗██╔╝
-# ██╔████╔██║   ██║   ██████╔╝ ╚███╔╝
-# ██║╚██╔╝██║   ██║   ██╔══██╗ ██╔██╗
-# ██║ ╚═╝ ██║   ██║   ██║  ██║██╔╝ ██╗
-# ╚═╝     ╚═╝   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝   [ENTER]
-
+```ascii
+███╗   ███╗████████╗██████╗ ██╗  ██╗
+████╗ ████║╚══██╔══╝██╔══██╗╚██╗██╔╝
+██╔████╔██║   ██║   ██████╔╝ ╚███╔╝
+██║╚██╔╝██║   ██║   ██╔══██╗ ██╔██╗
+██║ ╚═╝ ██║   ██║   ██║  ██║██╔╝ ██╗
+╚═╝     ╚═╝   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝ [ENTER]
+```
 ---
 
 ## BACKDOORS ::_BREACH :: FOLLOW_THE_RABBIT (Babylon.js Port)
@@ -13,6 +14,13 @@ RUN ./init_babylon.js
 Waking up...
 Establishing connection to the Construct...
 Rendering environment... v1.43b (BJS)
+
+---
+
+## Access the Construct
+
+> **Follow the White Rabbit:** [**PLAY THE LIVE DEMO HERE**](https://your-deployment-link-will-go-here.netlify.app/maze.html) <br>
+> _**(Link to be updated once deployed)**_
 
 ---
 
@@ -43,13 +51,6 @@ SYSTEM_MSG: Reality is fragile here. Expect glitches.
 *   **Game States:** Handles playing, paused, game over, and win conditions.
 *   **Sound Design:** Basic sound effects using the Web Audio API.
 *   **Debug Features:** Toggleable overlays for map view and potentially collision info.
-
----
-
-## Access the Construct
-
-> **Follow the White Rabbit:** [**PLAY THE LIVE DEMO HERE**](https://your-deployment-link-will-go-here.netlify.app/maze.html) <br>
-> _**(Link to be updated once deployed)**_
 
 ---
 
