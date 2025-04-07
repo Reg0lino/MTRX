@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Matrix Tetris</title>
+    <style>
+        /* Basic page styling */
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; background-color: #000; font-family: 'Consolas', 'Lucida Console', 'Courier New', monospace; user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; touch-action: none; }
+        canvas { display: block; position: absolute; top: 0; left: 0; }
+
+        /* Fullscreen prompt styling */
+        #fullscreen-prompt { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: lime; background-color: rgba(0, 0, 0, 0.85); padding: 25px; border: 1px solid lime; font-size: 1.6em; text-align: center; cursor: pointer; z-index: 10; transition: transform 0.05s ease-out, border-color 0.05s ease-out; line-height: 1.4; }
+        .version-text { display: block; font-size: 0.5em; opacity: 0.7; margin-top: 15px; }
+        .instructions-text { display: block; font-size: 0.45em; opacity: 0.6; margin-top: 10px; line-height: 1.3; text-align: left; /* Align instructions left */ padding-left: 10px; /* Add some padding */ }
+        .instructions-text strong { color: #afFaFf; /* Highlight control types */ } /* Style for control type labels */
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="fullscreen-prompt">
+        <span id="prompt-main-text">Tap or Press Enter to Start</span><br>
+        <span id="prompt-fullscreen-text">(Requires Fullscreen)</span>
+        <span class="version-text" id="prompt-version">v1.21</span> <!-- Version bump -->
+        <span class="instructions-text" id="prompt-instructions">
+            <strong>Controls:</strong><br>
+            <strong>Touch:</strong><br>
+            &nbsp; Tap Screen: Rotate<br>
+            &nbsp; Tap Hold/Next Area: Swap/Ignore<br>
+            &nbsp; Slide Finger: Move<br>
+            &nbsp; Flick Up/Down: Hard Drop<br>
+            <strong>Keyboard:</strong><br>
+            &nbsp; ← → : Move<br>
+            &nbsp; ↓ : Soft Drop<br>
+            &nbsp; ↑ : Hard Drop<br>
+            &nbsp; Space: Rotate<br>
+            &nbsp; Shift: Hold/Swap<br>
+            (Lock Delay Active - No Infinite Spin)
+        </span>
+    </div>
+
+    <script>
+    (function() { // IIFE
+
+        // --- Console, Elements, Context ---
+        window.console = window.console || { log: function() {}, error: function() {}, warn: function() {} };
+        const canvas = document.getElementById('gameCanvas');
+        const promptElement = document.getElementById('fullscreen-prompt');
+        const promptMainText = document.getElementById('prompt-main-text');
+        const promptFullscreenText = document.getElementById('prompt-fullscreen-text');
+        const promptVersionText = document.getElementById('prompt-version');
+        const promptInstructionsText = document.getElementById('prompt-instructions');
+        const ctx = canvas.getContext('2d');
+        if (!canvas || !promptElement || !ctx || !promptMainText || !promptFullscreenText || !promptVersionText || !promptInstructionsText) { alert("CRITICAL ERROR: Elements missing."); return; }
+        console.log(">>> Matrix Tetris STARTING <<<");
+
+        // --- Audio Context & Sound ---
+        let audioCtx = null;
+        function initAudio() { if (!audioCtx && (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined')) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); console.log("AudioContext initialized."); } catch (e) { console.error("Error initializing AudioContext:", e); audioCtx = null; } } if (audioCtx && audioCtx.state === 'suspended') { audioCtx.resume().then(() => { console.log("AudioContext resumed!"); }).catch(e => console.error("AudioContext resume failed:", e)); } }
+        function playTone(frequency = 440, duration = 50, type = 'square', volume = 0.08) { volume *= 0.9; if (!audioCtx || audioCtx.state === 'suspended') { initAudio(); if (!audioCtx || audioCtx.state !== 'running') { return; } } if (audioCtx.state !== 'running') { return; } try { const o = audioCtx.createOscillator(); const g = audioCtx.createGain(); o.type = type; o.frequency.setValueAtTime(frequency, audioCtx.currentTime); g.gain.setValueAtTime(volume, audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration / 1000); o.connect(g); g.connect(audioCtx.destination); o.start(audioCtx.currentTime); o.stop(audioCtx.currentTime + duration / 1000); } catch (e) { console.error("Error playing tone:", e); } }
+        const SOUNDS = {
+            ROTATE: () => playTone(300, 30, 'triangle', 0.06),
+            MOVE: () => playTone(150, 20, 'sine', 0.04),
+            LAND: () => playTone(100, 40, 'square', 0.08),
+            LINE_CLEAR: () => playTone(600, 100, 'sawtooth', 0.1),
+            HARD_DROP: () => playTone(80, 60, 'square', 0.1),
+            GAME_OVER: () => { playTone(200, 300, 'sawtooth', 0.15); setTimeout(() => playTone(150, 400, 'sawtooth', 0.15), 150); },
+            HOLD_SWAP: () => playTone(450, 70, 'sine', 0.07),
+            SOFT_DROP: () => playTone(90, 15, 'square', 0.03),
+            TETRIS_CLEAR: () => {
+                const baseFreq = 500; const interval = 60; const duration = 80; const vol = 0.12;
+                playTone(baseFreq, duration, 'triangle', vol);
+                setTimeout(() => playTone(baseFreq * 1.25, duration, 'triangle', vol), interval * 1);
+                setTimeout(() => playTone(baseFreq * 1.5, duration, 'triangle', vol), interval * 2);
+                setTimeout(() => playTone(baseFreq * 2, duration * 1.5, 'triangle', vol), interval * 3);
+            }
+        };
+        function playStartupSequence() {
+            const baseFreq = 300; const freqRange = 600; const beepDuration = 40; const beepVolume = 0.05; const delayBetweenBeeps = 45;
+            for (let i = 0; i < 10; i++) { setTimeout(() => { const freq = baseFreq + Math.random() * freqRange; playTone(freq, beepDuration, 'sine', beepVolume); }, i * delayBetweenBeeps); }
+        }
+
+        // --- Game Config ---
+        let width, height; const boardWidth = 10, boardHeight = 20; let blockSize = 0, boardXOffset = 0; const boardYOffset = 10; let board = [], currentPiece = null, currentRow = 0, currentCol = 0; let score = 0, gameOver = false; const initialDropInterval = 450; const minDropInterval = 100; let dropInterval = initialDropInterval; let lastDropTime = 0; let isPaused = true; let totalLinesCleared = 0; const LINES_PER_SPEED_INCREASE = 10; let nextSpeedUpMilestone = LINES_PER_SPEED_INCREASE; const SPEED_UP_MULTIPLIER = 0.90;
+        let flashEndTime = 0; const FLASH_DURATION = 120; const FLASH_COLOR = 'rgba(180, 255, 180, 0.5)';
+        let speedUpFlashEndTime = 0; const SPEED_UP_FLASH_DURATION = 100; const SPEED_UP_FLASH_COLOR = 'rgba(220, 255, 220, 0.65)';
+        let tetrisFlashEndTime = 0; const TETRIS_FLASH_DURATION = 250; const TETRIS_FLASH_COLOR = 'rgba(255, 255, 255, 0.7)';
+        let isLockDelayActive = false; let lockDelayStartTime = 0; const LOCK_DELAY_DURATION = 500; // Lock delay time in ms
+        const BOARD_BACKGROUND_COLOR = 'rgba(0, 0, 0, 0.5)';
+
+        // --- Next Piece & Hold Piece Config ---
+        let nextPiece = null; let heldPiece = null; let canSwap = true; const INFO_BOX_WIDTH_PERCENT = 0.15; const INFO_BOX_HEIGHT_RATIO = 1.0; const INFO_BOX_MARGIN = 15; const INFO_BOX_ALPHA = 0.3; const INFO_BOX_BORDER_ALPHA = 0.6; const INFO_BOX_LABEL_ALPHA = 0.8; let nextBoxRect = { x: 0, y: 0, width: 0, height: 0 }; let holdBoxRect = { x: 0, y: 0, width: 0, height: 0 }; const MINI_PIECE_SCALE = 0.6;
+
+        // --- Visuals Config ---
+        const BLOCK_FLICKER_CHANCE = 0.0005; const BLOCK_FLICKER_COLOR = 'rgba(255, 255, 255, 0.9)'; const TITLE_TEXT = "TETЯIX"; const TITLE_FONT_SIZE_RATIO = 0.1; const TITLE_ALPHA = 0.15; const TITLE_COLOR = 'hsl(120, 40%, 30%)';
+
+        // --- Matrix Config ---
+        const MATRIX_GLOBAL_FADE_FACTOR = 0.25; const MATRIX_BASE_SPEED = 2.5; const MATRIX_SPEED_VARIATION = 7.0; const MATRIX_MIN_FONT_SIZE = 8; const MATRIX_MAX_FONT_SIZE = 18; const MATRIX_SPAWN_CHANCE_PER_FRAME = 0.08; const MATRIX_COLUMN_WIDTH_MULTIPLIER = 0.9; const MATRIX_LEAD_CHAR_BRIGHTNESS = 'hsl(120, 90%, 85%)'; const MATRIX_MAIN_COLOR_HUE = 120; const MATRIX_TRAIL_MIN_LIGHTNESS = 25; const MATRIX_TRAIL_MAX_LIGHTNESS = 42; const MATRIX_katakana = 'ァアィイゥウェエォオカガキギクグケゲコゴサザシジスズセゼソゾタダチヂッツヅテデトドナニヌネノハバパヒビピフブプヘベペホボポマミムメモャヤュユョヨラリルレロヮワヰヱヲンヴヵヶ'; const MATRIX_latin = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+-*=<>()[]!?@#$&|:.;^~_'; const MATRIX_characterPool = (MATRIX_katakana + MATRIX_latin).split(''); let matrixStreams = {};
+
+        // --- Tetrominoes & Colors ---
+        const PIECES = [ [[1, 1, 1, 1]], [[1, 1], [1, 1]], [[0, 1, 0], [1, 1, 1]], [[0, 1, 1], [1, 1, 0]], [[1, 1, 0], [0, 1, 1]], [[1, 0, 0], [1, 1, 1]], [[0, 0, 1], [1, 1, 1]] ];
+        const BASE_COLORS_HSL = [ [120, 60, 50], [120, 70, 40], [120, 80, 60], [120, 50, 30], [120, 90, 70], [120, 65, 45], [120, 75, 55] ];
+        const BLOCK_BASE_ALPHA = 0.42; const GHOST_ALPHA = 0.01; const GHOST_COLOR = `rgba(120, 255, 120, ${GHOST_ALPHA})`; const BLOCK_SHIMMER_SPEED = 0.003; const BLOCK_SHIMMER_AMOUNT = 0.1;
+
+        // --- Touch Controls Config ---
+        let touchStartX = 0, touchStartY = 0, touchStartTime = 0; let isDraggingDown = false; isDraggingHorizontally = false; let lastSoftDropY = 0; let lastHorizontalMoveX = 0; let horizontalMoveAccumulator = 0;
+        const SWIPE_THRESHOLD = 40; const SWIPE_TIME_LIMIT = 500; const TAP_TIME_LIMIT = 280; const TAP_MOVEMENT_THRESHOLD = 30; const SOFT_DROP_START_THRESHOLD = 20; const SOFT_DROP_MOVE_PER_PIXEL = 0.02; const HORIZONTAL_MOVE_PIXEL_THRESHOLD = 0.7;
+
+        // --- Score/Lines/Prompt Display Config ---
+        const SCORE_LINES_Y_MARGIN = 15; const SCORE_LINES_FONT_SIZE = 20; const SCORE_COLOR_BASE = 'hsl(120, 80%, 70%)'; const SCORE_COLOR_GLITCH = 'hsl(120, 100%, 90%)'; const SCORE_GLITCH_CHANCE = 0.05; const SCORE_GLITCH_INTENSITY = 0.3; const SCORE_GLITCH_OFFSET = 2; const SCORE_GLITCH_CHARS = ['█','▓','▒','#','*','?','!','$','%','&','/','=']; const LINES_LABEL = "LINES:"; const SCORE_LABEL = "SCORE:"; const SCORE_LINES_BG_OPACITY = 0.5; const SCORE_LINES_BG_PADDING_X = 10; const SCORE_LINES_BG_PADDING_Y = 4; const SCORE_LINES_GAP = 20; const GAME_OVER_SCORE_FONT_SIZE = 40; const GAME_OVER_TEXT_FONT_SIZE = 25; const PROMPT_GLITCH_CHANCE = 0.4; const PROMPT_GLITCH_INTENSITY = 0.2; const PROMPT_JITTER_AMOUNT = 1.5; const PROMPT_BORDER_FLICKER_CHANCE = 0.3; const PROMPT_BORDER_FLICKER_HUE_SHIFT = 10; const PROMPT_BORDER_FLICKER_LIGHTNESS_SHIFT = 15;
+        const ORIGINAL_PROMPT_MAIN = promptMainText.textContent; const ORIGINAL_PROMPT_FS = promptFullscreenText.textContent; const ORIGINAL_PROMPT_VERSION = promptVersionText.textContent; const ORIGINAL_PROMPT_INSTRUCTIONS = promptInstructionsText.innerHTML;
+
+        // ===========================================
+        // HELPER FUNCTIONS (Stable)
+        // ===========================================
+        function MATRIX_getRandomChar(pool = MATRIX_characterPool) { return pool[Math.floor(Math.random() * pool.length)]; }
+        function glitchText(text, intensity = 0.1, charPool = SCORE_GLITCH_CHARS) { if (!text || text.length === 0 || charPool.length === 0) return text; return text.split('').map(char => (Math.random() < intensity && char !== ' ' && char !== ':' && char !== '\n' && char !== '<' && char !== '>') ? charPool[Math.floor(Math.random() * charPool.length)] : char).join(''); }
+        function updatePromptGlitches() { if (!promptElement || promptElement.style.display === 'none') return; if (Math.random() < PROMPT_GLITCH_CHANCE) { promptMainText.textContent = glitchText(ORIGINAL_PROMPT_MAIN, PROMPT_GLITCH_INTENSITY * 1.5); promptFullscreenText.textContent = glitchText(ORIGINAL_PROMPT_FS, PROMPT_GLITCH_INTENSITY * 0.8); promptVersionText.textContent = glitchText(ORIGINAL_PROMPT_VERSION, PROMPT_GLITCH_INTENSITY * 0.5); } else { promptMainText.textContent = ORIGINAL_PROMPT_MAIN; promptFullscreenText.textContent = ORIGINAL_PROMPT_FS; promptVersionText.textContent = ORIGINAL_PROMPT_VERSION; } const jitterX = (Math.random() - 0.5) * 2 * PROMPT_JITTER_AMOUNT; const jitterY = (Math.random() - 0.5) * 2 * PROMPT_JITTER_AMOUNT; promptElement.style.transform = `translate(-50%, -50%) translate(${jitterX}px, ${jitterY}px)`; if (Math.random() < PROMPT_BORDER_FLICKER_CHANCE) { const hueShift = (Math.random() - 0.5) * 2 * PROMPT_BORDER_FLICKER_HUE_SHIFT; const lightShift = (Math.random() - 0.5) * 2 * PROMPT_BORDER_FLICKER_LIGHTNESS_SHIFT; promptElement.style.borderColor = `hsl(${120 + hueShift}, 100%, ${50 + lightShift}%)`; } else { promptElement.style.borderColor = 'lime'; } }
+        function resetPromptGlitches() { if (!promptElement) return; promptMainText.textContent = ORIGINAL_PROMPT_MAIN; promptFullscreenText.textContent = ORIGINAL_PROMPT_FS; promptVersionText.textContent = ORIGINAL_PROMPT_VERSION; promptInstructionsText.innerHTML = ORIGINAL_PROMPT_INSTRUCTIONS; promptElement.style.transform = 'translate(-50%, -50%)'; promptElement.style.borderColor = 'lime'; }
+
+        // ===========================================
+        // MATRIX BACKGROUND CODE (Stable)
+        // ===========================================
+        class MATRIX_Character { constructor(x, y, s, f, v, h = false) { this.x = x; this.y = y; this.speed = s; this.fontSize = f; this.value = v || MATRIX_getRandomChar(); this.isHead = h; this.alpha = h ? 1.0 : (0.3 + Math.random() * 0.5); this.hue = MATRIX_MAIN_COLOR_HUE; this.lightness = h ? 65 : MATRIX_TRAIL_MIN_LIGHTNESS + Math.random() * (MATRIX_TRAIL_MAX_LIGHTNESS - MATRIX_TRAIL_MIN_LIGHTNESS); } update() { this.y += this.speed; if (!this.isHead) this.alpha = Math.max(0.01, this.alpha - 0.01); else this.alpha = 1.0; } draw(ctx) { if (!ctx || this.alpha < 0.05 || isNaN(this.x) || isNaN(this.y)) return; const color = `hsla(${this.hue}, 85%, ${this.lightness}%, ${this.alpha})`; try { ctx.fillStyle = color; ctx.font = `${this.fontSize}px monospace`; ctx.fillText(this.value, this.x, this.y); } catch (e) {} if (!this.isHead && Math.random() < 0.015) this.value = MATRIX_getRandomChar(); } }
+        class MATRIX_Stream { constructor(x,h){this.x=x;this.streamHeight=h;this.characters=[];this.baseFontSize=Math.floor(Math.random()*(MATRIX_MAX_FONT_SIZE-MATRIX_MIN_FONT_SIZE+1))+MATRIX_MIN_FONT_SIZE;this.speed=MATRIX_BASE_SPEED+Math.random()*MATRIX_SPEED_VARIATION;let iY=-this.baseFontSize*Math.floor(Math.random()*30+15);this.characters.push(new MATRIX_Character(this.x,iY,this.speed,this.baseFontSize,null,true));} spawnNewCharacter(){if(!this.characters.length){this.characters.push(new MATRIX_Character(this.x,0,this.speed,this.baseFontSize,null,true));return}const hC=this.characters[this.characters.length-1];if(!hC)return;const t=this.baseFontSize*(1.0+Math.random()*0.5);if(hC.y>t){try{const nC=new MATRIX_Character(this.x,0,this.speed,this.baseFontSize,null,true);hC.isHead=false;this.characters.push(nC);}catch(e){}}} updateAndDraw(ctx){let a=false;for(let i=this.characters.length-1;i>=0;i--){const c=this.characters[i];if(!c){this.characters.splice(i,1);continue}try{c.update();if(c.y>-this.baseFontSize*5&&c.y<this.streamHeight+this.baseFontSize*5){c.draw(ctx);a=true}if(c.y>this.streamHeight+this.baseFontSize*30||(c.y>this.streamHeight&&c.alpha<0.01)){this.characters.splice(i,1)}else{a=true}}catch(e){this.characters.splice(i,1)}}this.spawnNewCharacter();return this.characters.length===0&&!a;}}
+        function MATRIX_setupStreams() { matrixStreams={};const a=(MATRIX_MIN_FONT_SIZE+MATRIX_MAX_FONT_SIZE)/2;const p=a*MATRIX_COLUMN_WIDTH_MULTIPLIER;const n=p>0?Math.ceil(width/p):0;for(let i=0;i<n;i++){const k=i.toString();const x=i*p+(Math.random()*p*0.5-p*0.25);if(!isNaN(x)){try{matrixStreams[k]=new MATRIX_Stream(x,height);}catch(e){}}}}
+        function MATRIX_drawGlobalRain(ctx) { if(!ctx||!width||!height)return;let d=[];const a=(MATRIX_MIN_FONT_SIZE+MATRIX_MAX_FONT_SIZE)/2;const p=a*MATRIX_COLUMN_WIDTH_MULTIPLIER;const n=p>0?Math.ceil(width/p):0;for(const k in matrixStreams){if(!Object.prototype.hasOwnProperty.call(matrixStreams,k))continue;const s=matrixStreams[k];if(s){try{if(s.updateAndDraw(ctx))d.push(k);}catch(e){console.error("Stream err:",e);d.push(k);}}else{d.push(k);}}d.forEach(key=>delete matrixStreams[key]);for(let i=0;i<n;i++){const k=i.toString();if(!matrixStreams[k]&&Math.random()<MATRIX_SPAWN_CHANCE_PER_FRAME){const x=i*p+(Math.random()*p*0.5-p*0.25);if(!isNaN(x)){try{matrixStreams[k]=new MATRIX_Stream(x,height);}catch(e){}}}}}
+
+        // ===========================================
+        // TETRIS GAME LOGIC
+        // ===========================================
+        function createBoard() { board = Array.from({ length: boardHeight }, () => Array(boardWidth).fill(0)); }
+        function getRandomPiece() { const i = Math.floor(Math.random() * PIECES.length); return { shape: PIECES[i], colorIndex: i }; }
+        function spawnPiece() {
+            currentPiece = nextPiece || getRandomPiece();
+            nextPiece = getRandomPiece();
+            currentCol = Math.floor(boardWidth / 2) - Math.floor(currentPiece.shape[0].length / 2);
+            currentRow = 0; // Start at the very top row
+            canSwap = true;
+            isLockDelayActive = false; // Reset lock delay status
+            lockDelayStartTime = 0;
+
+            if (!isValidMove(currentPiece.shape, currentRow, currentCol)) {
+                // Check if the spawn position itself is invalid (game over condition)
+                console.error(`!!! GAME OVER ON SPAWN !!! Piece type: ${currentPiece.colorIndex}, Position: R=${currentRow}, C=${currentCol}.`);
+                gameOver = true;
+                isPaused = true; // Ensure game is paused on game over
+                SOUNDS.GAME_OVER();
+                // Crucially, don't reset lastDropTime if game over on spawn
+            } else {
+                 // Piece spawned successfully
+                 lastDropTime = performance.now(); // Reset drop timer ONLY on successful spawn
+                 console.log("Spawn successful", {row: currentRow, col: currentCol, piece: currentPiece.colorIndex});
+            }
+        }
+        function rotateMatrix(matrix) { const r=matrix.length,c=matrix[0].length;const n=Array.from({length:c},()=>Array(r).fill(0));for(let y=0;y<r;y++){for(let x=0;x<c;x++){if(matrix[y][x])n[x][r-1-y]=1;}}return n; }
+        function rotatePiece() {
+            if (!currentPiece || isPaused || gameOver) return;
+            const originalShape = currentPiece.shape;
+            const rotatedShape = rotateMatrix(originalShape);
+            const kicks = [0, -1, 1, -2, 2]; // Standard kicks
+
+            for (const kick of kicks) {
+                if (isValidMove(rotatedShape, currentRow, currentCol + kick)) {
+                    currentPiece.shape = rotatedShape;
+                    currentCol += kick;
+                    SOUNDS.ROTATE();
+                    // If rotation happens while lock delay is active, reset the timer
+                    if (isLockDelayActive) {
+                         // Check if piece is still grounded after rotation/kick
+                         if (!isValidMove(currentPiece.shape, currentRow + 1, currentCol)) {
+                            lockDelayStartTime = performance.now(); // Reset timer
+                            // console.log("Lock delay timer reset due to rotation while grounded");
+                         } else {
+                             // Piece rotated off the ground, cancel lock delay
+                             isLockDelayActive = false;
+                             // console.log("Lock delay cancelled due to rotation off ground");
+                         }
+                    }
+                    return; // Rotation successful
+                }
+            }
+            // If loop finishes without returning, rotation failed
+        }
+        function isValidMove(shape, r, c) {
+            for(let y=0; y<shape.length; y++) {
+                for(let x=0; x<shape[y].length; x++) {
+                    if(shape[y][x]) { // Only check filled parts of the piece
+                        let checkR = r + y; // Potential Board Row
+                        let checkC = c + x; // Potential Board Column
+
+                        // 1. Check HORIZONTAL boundaries (Left/Right Walls)
+                        if (checkC < 0 || checkC >= boardWidth) {
+                            return false;
+                        }
+                        // 2. Check VERTICAL boundaries (Floor)
+                        if (checkR >= boardHeight) {
+                            return false;
+                        }
+                        // 3. Check TOP boundary (Ceiling) - Allow moves/spawns partially above row 0
+                        // Collision check only needed for rows >= 0
+                        if (checkR < 0) {
+                            continue; // This part is above board, skip board collision check
+                        }
+                        // 4. Check Collision with existing blocks on the board
+                        if (board[checkR] && board[checkR][checkC] !== 0) {
+                            return false;
+                        }
+                    }
+                }
+            }
+            return true; // All parts are valid
+        }
+        function movePiece(deltaX, deltaY) {
+            if (!currentPiece || isPaused || gameOver) return { moved: false, needsLock: false };
+
+            const targetRow = currentRow + deltaY;
+            const targetCol = currentCol + deltaX;
+
+            if (isValidMove(currentPiece.shape, targetRow, targetCol)) {
+                // Move is valid, update position
+                currentCol = targetCol;
+                currentRow = targetRow;
+
+                // If the piece moved *down*, it's no longer resting, so cancel any active lock delay.
+                if (deltaY > 0) {
+                    isLockDelayActive = false;
+                    // console.log("Lock delay cancelled by downward move");
+                }
+                // If the piece moved *horizontally* while lock delay *was* active AND it remained grounded, reset the timer.
+                else if (deltaX !== 0 && isLockDelayActive) {
+                    if (!isValidMove(currentPiece.shape, currentRow + 1, currentCol)) {
+                        lockDelayStartTime = performance.now();
+                        // console.log("Lock delay timer reset due to horizontal move while grounded");
+                    } else {
+                        // Moved horizontally off a ledge, cancel lock delay
+                        isLockDelayActive = false;
+                        // console.log("Lock delay cancelled due to horizontal move off ground");
+                    }
+                }
+
+                // Check if the piece WILL need to lock *after* this move (i.e., if it lands)
+                const landed = !isValidMove(currentPiece.shape, currentRow + 1, currentCol);
+                return { moved: true, needsLock: landed };
+            } else {
+                // Move failed. Check *why*.
+                // If we tried to move DOWN (deltaY > 0) and failed, it means the piece has landed.
+                if (deltaY > 0) {
+                    // Start lock delay if it wasn't already active
+                    if (!isLockDelayActive) {
+                        // console.log("Starting lock delay due to failed downward move.");
+                        isLockDelayActive = true;
+                        lockDelayStartTime = performance.now();
+                    }
+                    return { moved: false, needsLock: true }; // Indicate move failed *because* it needs to lock
+                } else {
+                     // Move failed for other reasons (e.g., horizontal collision)
+                     return { moved: false, needsLock: false };
+                }
+            }
+        }
+        function hardDrop() {
+            if (!currentPiece || isPaused || gameOver) return;
+
+            const initialRow = currentRow;
+            const ghostR = calculateGhostPosition();
+
+            if (ghostR > currentRow) {
+                SOUNDS.HARD_DROP();
+                currentRow = ghostR;
+                score += (ghostR - initialRow) * 2; // Score for hard drop distance (adjust multiplier as needed)
+                // Lock immediately after hard drop (common behavior, bypasses lock delay)
+                lockPiece();
+            } else {
+                // If ghost is at current row, it means it can't move down.
+                // Lock it immediately as hard drop implies instant placement.
+                lockPiece();
+            }
+        }
+        function softDrop() {
+            if (!currentPiece || isPaused || gameOver) return false;
+
+            const moveResult = movePiece(0, 1);
+
+            if (moveResult.moved) {
+                SOUNDS.SOFT_DROP();
+                // Reset auto-drop timer *only if* manual drop occurred.
+                lastDropTime = performance.now();
+                score += 1; // Score for soft dropping one step
+                return true;
+            }
+            // If move failed because it landed (needsLock), movePiece already started the timer.
+            return false;
+        }
+        function lockPiece() {
+            if(!currentPiece) {
+                 console.warn("lockPiece called with no currentPiece.");
+                 return;
+            }
+
+            // console.log(`Attempting to lock piece ${currentPiece.colorIndex} at R=${currentRow}, C=${currentCol}`);
+            isLockDelayActive = false; // Ensure lock delay is off
+            lockDelayStartTime = 0;
+            let pieceLanded = false; // Track if any block was actually placed
+
+            for(let y=0; y<currentPiece.shape.length; y++) {
+                for(let x=0; x<currentPiece.shape[y].length; x++) {
+                    if(currentPiece.shape[y][x]) {
+                        let bR = currentRow + y;
+                        let bC = currentCol + x;
+
+                        // Check bounds and Game Over condition (locking above visible board)
+                        if (bC >= 0 && bC < boardWidth) {
+                            if (bR < 0) {
+                                // Piece locked partially or fully above the visible board -> GAME OVER
+                                console.log(`LockPiece: Block locked above board @ R=${bR}, C=${bC}. GAME OVER.`);
+                                gameOver = true;
+                                break; // Exit inner loop immediately
+                            } else if (bR < boardHeight) {
+                                // Place block on the board if within bounds
+                                if (board[bR]) {
+                                     // Check if cell is already occupied (shouldn't happen if isValidMove is correct, but good safeguard)
+                                     if (board[bR][bC] !== 0) {
+                                         console.error(`LockPiece: Attempted to lock onto occupied cell @ R=${bR}, C=${bC}! Current value: ${board[bR][bC]}`);
+                                         // Treat this as a critical error -> Game Over
+                                         gameOver = true;
+                                         break;
+                                     }
+                                     board[bR][bC] = currentPiece.colorIndex + 1;
+                                     pieceLanded = true;
+                                } else {
+                                     console.error(`LockPiece: Invalid board row index ${bR} accessed during locking.`);
+                                     gameOver = true;
+                                     break;
+                                }
+                            } else {
+                                // Piece locked partially below the board (bR >= boardHeight) - Should be caught by isValidMove
+                                console.warn(`LockPiece: Block attempted lock below board @ R=${bR}, C=${bC}.`);
+                                // This is likely an error state, trigger Game Over
+                                gameOver = true;
+                                break;
+                            }
+                        } else {
+                             // Piece locked partially outside horizontal bounds (bC < 0 or bC >= boardWidth) - Should be caught by isValidMove
+                             console.warn(`LockPiece: Block attempted lock outside horizontal bounds @ R=${bR}, C=${bC}.`);
+                             gameOver = true;
+                             break;
+                        }
+                    }
+                }
+                 if (gameOver) break; // Exit outer loop if game over detected in inner loop
+            }
+
+            // --- Post-Lock Processing ---
+            currentPiece = null; // Piece is now part of the board, clear the active piece
+
+            if (gameOver) {
+                isPaused = true; // Ensure pause state reflects game over
+                SOUNDS.GAME_OVER();
+                console.log("GAME OVER confirmed after lock attempt.");
+                // Do NOT spawn next piece
+                return;
+            }
+
+            if (pieceLanded) {
+                 SOUNDS.LAND();
+                 const lines = clearLines(); // Check for and clear completed lines AFTER placing
+                 // Spawn next piece *after* clearing lines
+                 spawnPiece();
+            } else {
+                // This case: lockPiece was called, no blocks were placed within bounds, and it wasn't game over.
+                // This might happen if a piece is somehow locked entirely outside the board without triggering
+                // the bR < 0 game over. This indicates a logic error elsewhere.
+                console.error("lockPiece finished: No blocks landed AND not game over. Invalid state?");
+                // As a fallback, trigger game over? Or just spawn next piece? Spawning might be risky.
+                gameOver = true;
+                isPaused = true;
+                SOUNDS.GAME_OVER();
+            }
+        }
+        function clearLines() {
+            let cleared = 0;
+            let rowsToClear = [];
+            for (let r = boardHeight - 1; r >= 0; r--) {
+                if (board[r] && board[r].every(c => c !== 0)) {
+                    cleared++;
+                    rowsToClear.push(r);
+                } else if (!board[r]) {
+                    console.error(`clearLines: Row ${r} is undefined! Board length: ${board.length}`);
+                }
+            }
+
+            if (cleared > 0) {
+                // Sort NOT needed for correctness with splice, but doesn't hurt
+                // rowsToClear.sort((a, b) => a - b);
+
+                // Remove rows from highest index down to avoid shifting issues with splice
+                for (let i = rowsToClear.length - 1; i >= 0; i--) {
+                     const rowIndex = rowsToClear[i];
+                     if (rowIndex >= 0 && rowIndex < board.length) {
+                         board.splice(rowIndex, 1);
+                     } else {
+                         console.error(`clearLines: Invalid row index ${rowIndex} in rowsToClear array during splice.`);
+                     }
+                }
+                // Add new empty rows at the top
+                for (let i = 0; i < cleared; i++) {
+                    board.unshift(Array(boardWidth).fill(0));
+                }
+
+                // Scoring and Effects
+                score += cleared * 100 * cleared; // Simple scoring
+                totalLinesCleared += cleared;
+
+                if (cleared >= 4) { // >= 4 handles potential future >4 line clears if rules change
+                     SOUNDS.TETRIS_CLEAR();
+                     tetrisFlashEndTime = performance.now() + TETRIS_FLASH_DURATION;
+                } else {
+                     SOUNDS.LINE_CLEAR();
+                     flashEndTime = performance.now() + FLASH_DURATION;
+                }
+
+                // Speed increase logic
+                while (totalLinesCleared >= nextSpeedUpMilestone) {
+                    dropInterval = Math.max(minDropInterval, dropInterval * SPEED_UP_MULTIPLIER);
+                    nextSpeedUpMilestone += LINES_PER_SPEED_INCREASE;
+                    console.log(`--- SPEED UP! Interval: ${dropInterval.toFixed(0)}ms. Next at ${nextSpeedUpMilestone} lines ---`);
+                    speedUpFlashEndTime = performance.now() + SPEED_UP_FLASH_DURATION;
+                }
+            }
+            return cleared;
+        }
+        function calculateGhostPosition() { if(!currentPiece||gameOver)return currentRow;let ghostR=currentRow;while(isValidMove(currentPiece.shape,ghostR+1,currentCol))ghostR++;return ghostR;}
+        function swapPiece() { if (isPaused || gameOver || !canSwap || !currentPiece) return; SOUNDS.HOLD_SWAP(); isLockDelayActive = false; // Cancel lock delay on swap
+             if (heldPiece === null) { heldPiece = { shape: JSON.parse(JSON.stringify(currentPiece.shape)), // Deep copy shape colorIndex: currentPiece.colorIndex }; spawnPiece(); // Spawn next piece } else { // Store current piece details temporarily let tempShape = JSON.parse(JSON.stringify(currentPiece.shape)); // Deep copy let tempIndex = currentPiece.colorIndex; // Retrieve held piece currentPiece = { shape: heldPiece.shape, colorIndex: heldPiece.colorIndex }; // Move stored piece to hold heldPiece = { shape: tempShape, colorIndex: tempIndex }; // Reset position for the retrieved piece currentCol = Math.floor(boardWidth / 2) - Math.floor(currentPiece.shape[0].length / 2); currentRow = 0; // Check if the swapped-in piece causes immediate game over if (!isValidMove(currentPiece.shape, currentRow, currentCol)) { console.log("GAME OVER (Caused by Swap into blocked state)"); gameOver = true; isPaused = true; SOUNDS.GAME_OVER(); currentPiece = null; // Clear current piece immediately } else { lastDropTime = performance.now(); // Reset drop timer for new piece isLockDelayActive = false; // Ensure lock delay is off for the swapped piece } } canSwap = false; // Prevent swapping again until next piece locks
+        }
+
+        // ===========================================
+        // DRAWING FUNCTIONS (Stable)
+        // ===========================================
+        function drawBlock(r, c, ci, g = false, t = performance.now(), isMini = false, miniBlockSize = blockSize) { const size = isMini ? miniBlockSize : blockSize; if (size <= 0) return; let a = g ? GHOST_ALPHA : BLOCK_BASE_ALPHA; let fC; const shimmerFactor = Math.sin(t * BLOCK_SHIMMER_SPEED + r + c * 0.5) * BLOCK_SHIMMER_AMOUNT; const currentAlpha = Math.max(g ? GHOST_ALPHA : 0.05, Math.min(1.0, a + (g ? 0 : shimmerFactor))); if (g) { fC = `rgba(120, 255, 120, ${GHOST_ALPHA})`; } else { if (ci < 0 || ci >= BASE_COLORS_HSL.length) { console.warn(`Invalid colorIndex ${ci} for block at ${r},${c}`); fC = 'rgba(255,0,0,0.5)'; // Bright red error color } else { const [h, s, l] = BASE_COLORS_HSL[ci]; fC = `hsla(${h}, ${s}%, ${l}%, ${currentAlpha})`; } } let shouldFlicker = false; if (!g && !isMini && Math.random() < BLOCK_FLICKER_CHANCE) { fC = BLOCK_FLICKER_COLOR; shouldFlicker = true; } ctx.fillStyle = fC; const x = (isMini ? 0 : boardXOffset) + c * size; const y = (isMini ? 0 : boardYOffset) + r * size; ctx.fillRect(x, y, size, size); if (!isMini) { ctx.strokeStyle = shouldFlicker ? 'rgba(100, 255, 100, 0.5)' : (g ? `rgba(200, 255, 200, ${GHOST_ALPHA * 3.5})` : `rgba(0, 0, 0, ${currentAlpha * 0.6})`); ctx.lineWidth = g ? 0.5 : 1; ctx.strokeRect(x + (g ? 0.25 : 0.5), y + (g ? 0.25 : 0.5), size - (g ? 0.5 : 1), size - (g ? 0.5 : 1)); } else { ctx.strokeStyle = `rgba(200, 255, 200, ${currentAlpha * 0.3})`; ctx.lineWidth = 0.5; ctx.strokeRect(x+0.5, y+0.5, size-1, size-1); } }
+        function drawBoard(timestamp){if(blockSize<=0)return;for(let r=0;r<boardHeight;r++){for(let c=0;c<boardWidth;c++){if(board[r] && board[r][c]!==0){const colorIndex = board[r][c]-1;if(colorIndex>=0&&colorIndex<BASE_COLORS_HSL.length){drawBlock(r,c,colorIndex,false,timestamp);}else{console.warn(`Invalid board block value ${board[r][c]} at ${r},${c}`);}}}}}ctx.strokeStyle=`hsla(120,50%,20%,${BLOCK_BASE_ALPHA})`;ctx.lineWidth=2;ctx.strokeRect(boardXOffset,boardYOffset,boardWidth*blockSize,boardHeight*blockSize);}
+        function drawPiece(piece, g = false, t){if(!piece || blockSize <= 0) return; const { shape, colorIndex, r, c } = { shape: piece.shape, colorIndex: piece.colorIndex, r: currentRow, c: currentCol }; // Use current piece's row/col if(colorIndex<0 || colorIndex >= BASE_COLORS_HSL.length){ console.warn(`Invalid colorIndex ${colorIndex} for active piece`); return; } for(let y=0;y<shape.length;y++){for(let x=0;x<shape[y].length;x++){if(shape[y][x])drawBlock(r+y,c+x,colorIndex,g,t);}}}
+        function drawGhostPiece(piece, t){ if(!piece || gameOver || blockSize <= 0) return; const ghostR = calculateGhostPosition(); if (ghostR > currentRow) { // Only draw ghost if it's strictly below current piece const { shape, colorIndex, c } = { shape: piece.shape, colorIndex: piece.colorIndex, c: currentCol }; if(colorIndex<0 || colorIndex >= BASE_COLORS_HSL.length){ console.warn(`Invalid colorIndex ${colorIndex} for ghost piece`); return; } for(let y=0;y<shape.length;y++){for(let x=0;x<shape[y].length;x++){if(shape[y][x])drawBlock(ghostR+y,c+x,colorIndex,true,t);}} }}
+        function drawMiniPiece(piece, boxRect, timestamp) { if (!piece || !ctx || boxRect.width <= 0) return; const shape = piece.shape; const colorIndex = piece.colorIndex; if(colorIndex<0 || colorIndex >= BASE_COLORS_HSL.length){ console.warn(`Invalid colorIndex ${colorIndex} for mini piece`); return; } const pieceHeight = shape.length; const pieceWidth = shape.length > 0 ? shape[0].length : 0; if(pieceWidth === 0) return; const maxDim = Math.max(pieceWidth, pieceHeight, 2); const availableWidth = boxRect.width * MINI_PIECE_SCALE; const availableHeight = boxRect.height * MINI_PIECE_SCALE; const miniBlockSize = Math.max(1, Math.floor(Math.min(availableWidth / maxDim, availableHeight / maxDim))); if (miniBlockSize <= 1) return; const totalPieceWidth = pieceWidth * miniBlockSize; const totalPieceHeight = pieceHeight * miniBlockSize; const startX = boxRect.x + (boxRect.width - totalPieceWidth) / 2; const startY = boxRect.y + (boxRect.height - totalPieceHeight) / 2; ctx.save(); ctx.translate(startX, startY); for (let y = 0; y < pieceHeight; y++) { for (let x = 0; x < pieceWidth; x++) { if (shape[y][x]) { drawBlock(y, x, colorIndex, false, timestamp, true, miniBlockSize); } } } ctx.restore(); }
+        function drawInfoBoxes(timestamp) { if (!ctx || blockSize <= 0) return; const boxColor = `rgba(0, 40, 0, ${INFO_BOX_ALPHA})`; const borderColor = `hsla(120, 70%, 50%, ${INFO_BOX_BORDER_ALPHA})`; const labelColor = `hsla(120, 80%, 70%, ${INFO_BOX_LABEL_ALPHA})`; const labelFont = `${Math.max(10, Math.floor(blockSize * 0.6))}px monospace`; ctx.fillStyle = boxColor; ctx.fillRect(nextBoxRect.x, nextBoxRect.y, nextBoxRect.width, nextBoxRect.height); ctx.strokeStyle = borderColor; ctx.lineWidth = 1; ctx.strokeRect(nextBoxRect.x, nextBoxRect.y, nextBoxRect.width, nextBoxRect.height); ctx.fillStyle = labelColor; ctx.font = labelFont; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText("Next", nextBoxRect.x + nextBoxRect.width / 2, nextBoxRect.y + 5); if (nextPiece) { drawMiniPiece(nextPiece, nextBoxRect, timestamp); } ctx.fillStyle = boxColor; ctx.fillRect(holdBoxRect.x, holdBoxRect.y, holdBoxRect.width, holdBoxRect.height); ctx.strokeStyle = borderColor; ctx.strokeRect(holdBoxRect.x, holdBoxRect.y, holdBoxRect.width, holdBoxRect.height); ctx.fillStyle = labelColor; ctx.fillText("Hold", holdBoxRect.x + holdBoxRect.width / 2, holdBoxRect.y + 5); if (heldPiece) { drawMiniPiece(heldPiece, holdBoxRect, timestamp); } if (!canSwap) { ctx.fillStyle = 'rgba(100, 0, 0, 0.4)'; ctx.fillRect(holdBoxRect.x, holdBoxRect.y, holdBoxRect.width, holdBoxRect.height); } ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; }
+        function drawGame(timestamp){
+            if (!ctx || blockSize <= 0) return;
+            // Draw semi-transparent background for the play area
+            ctx.fillStyle = BOARD_BACKGROUND_COLOR;
+            ctx.fillRect(boardXOffset, boardYOffset, boardWidth * blockSize, boardHeight * blockSize);
+            // Draw the board (blocks already placed)
+            drawBoard(timestamp);
+            // Draw ghost piece first (behind active piece)
+            if (currentPiece && !gameOver) {
+                drawGhostPiece(currentPiece, timestamp);
+            }
+            // Draw the active piece
+            if (currentPiece && !gameOver) {
+                drawPiece(currentPiece, false, timestamp);
+            }
+        }
+        function drawScoreAndLines() { if (!ctx || !width) return; const displayFont = `bold ${SCORE_LINES_FONT_SIZE}px monospace`; ctx.font = displayFont; let scoreStr = `${SCORE_LABEL}${score.toString().padStart(6,'0')}`; let linesStr = `${LINES_LABEL}${totalLinesCleared.toString().padStart(3,'0')}`; let displayScoreStr = scoreStr; let displayLinesStr = linesStr; let displayColor = SCORE_COLOR_BASE; let offsetX = 0, offsetY = 0; if (Math.random() < SCORE_GLITCH_CHANCE) { displayScoreStr = glitchText(scoreStr, SCORE_GLITCH_INTENSITY, SCORE_GLITCH_CHARS); displayLinesStr = glitchText(linesStr, SCORE_GLITCH_INTENSITY, SCORE_GLITCH_CHARS); displayColor = SCORE_COLOR_GLITCH; offsetX = (Math.random() - 0.5) * SCORE_GLITCH_OFFSET * 2; offsetY = (Math.random() - 0.5) * SCORE_GLITCH_OFFSET * 2; } const scoreMetrics = ctx.measureText(displayScoreStr); const linesMetrics = ctx.measureText(displayLinesStr); const totalTextWidth = scoreMetrics.width + SCORE_LINES_GAP + linesMetrics.width; const textHeight = SCORE_LINES_FONT_SIZE; const bgWidth = totalTextWidth + SCORE_LINES_BG_PADDING_X * 2; const bgHeight = textHeight + SCORE_LINES_BG_PADDING_Y * 2; const bgX = width / 2 - bgWidth / 2; const bgY = SCORE_LINES_Y_MARGIN - SCORE_LINES_BG_PADDING_Y; ctx.fillStyle = `rgba(0, 0, 0, ${SCORE_LINES_BG_OPACITY})`; ctx.fillRect(bgX, bgY, bgWidth, bgHeight); ctx.font = displayFont; ctx.fillStyle = displayColor; ctx.textBaseline = 'top'; const drawY = SCORE_LINES_Y_MARGIN + offsetY; const scoreX = bgX + SCORE_LINES_BG_PADDING_X + offsetX; ctx.textAlign = 'left'; try { ctx.fillText(displayScoreStr, scoreX, drawY); } catch(e) {} const linesX = bgX + bgWidth - SCORE_LINES_BG_PADDING_X + offsetX; ctx.textAlign = 'right'; try { ctx.fillText(displayLinesStr, linesX, drawY); } catch(e) {} ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; }
+        function drawGameOverScreen(){if(!ctx||!width||!height)return;ctx.font=`bold ${GAME_OVER_SCORE_FONT_SIZE}px monospace`;ctx.fillStyle=SCORE_COLOR_GLITCH;ctx.textAlign='center';ctx.textBaseline='middle';let sStr=score.toString();let dStr=glitchText(sStr,SCORE_GLITCH_INTENSITY*1.5);ctx.fillText(dStr,width/2,height/2);ctx.font=`${GAME_OVER_TEXT_FONT_SIZE}px monospace`;ctx.fillStyle='red';ctx.fillText("GAME OVER",width/2,height/2-GAME_OVER_SCORE_FONT_SIZE*1.2);ctx.fillStyle='white';ctx.fillText("Tap or Press Enter to Restart",width/2,height/2+GAME_OVER_SCORE_FONT_SIZE*0.8);ctx.textAlign='left';}
+        function drawTitle() { if (!ctx || !width || !height) return; const fontSize = Math.floor(height * TITLE_FONT_SIZE_RATIO); ctx.font = `bold ${fontSize}px monospace`; ctx.fillStyle = TITLE_COLOR; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; const titleX = width / 2 + (Math.random() - 0.5) * 4; const titleY = height / 2 + (Math.random() - 0.5) * 4; let titleToDraw = TITLE_TEXT; if (Math.random() < 0.03) { titleToDraw = glitchText(TITLE_TEXT, 0.2, ['#', '*', '!', '?']); } ctx.fillText(titleToDraw, titleX, titleY); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; }
+
+        // ===========================================
+        // Game Loop
+        // ===========================================
+        let gameStartTime = 0; let lastFrameTime = 0; const MAX_FPS = 60; const MIN_FRAME_TIME = 1000 / MAX_FPS;
+        function gameLoop(timestamp) {
+            requestAnimationFrame(gameLoop); // Request next frame immediately
+            const elapsed = timestamp - lastFrameTime;
+            // Optional frame rate limiting
+            // if (elapsed < MIN_FRAME_TIME) return;
+            lastFrameTime = timestamp;
+            const now = performance.now();
+
+            // --- Game Logic Update ---
+            // Only run updates if game is active (not paused, not game over, and has a current piece)
+            if (!isPaused && !gameOver && currentPiece) {
+                 // 1. Check Lock Delay first
+                 if (isLockDelayActive) {
+                     // Check if the piece is still grounded
+                     if (!isValidMove(currentPiece.shape, currentRow + 1, currentCol)) {
+                         // Grounded: Check if lock delay timer expired
+                         if (now - lockDelayStartTime > LOCK_DELAY_DURATION) {
+                             lockPiece(); // Lock the piece
+                         }
+                         // Else: Timer still running, piece rests
+                     } else {
+                         // No longer grounded (e.g., moved off ledge): Cancel lock delay
+                         isLockDelayActive = false;
+                         // console.log("Lock delay cancelled: piece no longer grounded.");
+                     }
+                 }
+                 // 2. Automatic Drop (only if lock delay is NOT active)
+                 else if (now - lastDropTime > dropInterval) {
+                     const moveResult = movePiece(0, 1); // Try to move down
+                     // movePiece handles starting lock delay internally if it lands.
+                     // Reset the timer regardless of success/fail to ensure consistent drop attempts.
+                     lastDropTime = now;
+                 }
+            } // End of active game logic update
+
+             // --- Drawing ---
+             // Draw background / matrix rain on every frame
+             ctx.fillStyle = `rgba(0, 0, 0, ${MATRIX_GLOBAL_FADE_FACTOR})`;
+             ctx.fillRect(0, 0, width, height);
+             MATRIX_drawGlobalRain(ctx);
+             drawTitle(); // Draw title over matrix
+
+             // Conditional drawing based on game state
+             if (gameOver) {
+                 // Game is over, draw the game over screen
+                 drawGameOverScreen();
+                 if (promptElement.style.display !== 'none') { promptElement.style.display = 'none'; resetPromptGlitches(); }
+             } else if (isPaused && gameStartTime === 0) {
+                 // Initial paused state, show prompt and update its glitches
+                 if (promptElement.style.display === 'none') { promptElement.style.display = 'block'; }
+                 updatePromptGlitches();
+             } else {
+                 // Game is active (or paused mid-game, though pause toggle isn't implemented)
+                 if (promptElement.style.display !== 'none') { promptElement.style.display = 'none'; resetPromptGlitches(); }
+                 // Draw main game elements
+                 drawGame(timestamp); // Draws board, current piece, ghost
+                 drawInfoBoxes(timestamp);
+                 drawScoreAndLines();
+             }
+
+             // Draw global flash effects last (overlay)
+             if (now < flashEndTime) { ctx.fillStyle = FLASH_COLOR; ctx.fillRect(0, 0, width, height); }
+             if (now < speedUpFlashEndTime) { ctx.fillStyle = SPEED_UP_FLASH_COLOR; ctx.fillRect(0, 0, width, height); }
+             if (now < tetrisFlashEndTime) { ctx.fillStyle = TETRIS_FLASH_COLOR; ctx.fillRect(0, 0, width, height); }
+        }
+
+        // ===========================================
+        // Setup & Sizing
+        // ===========================================
+        function calculateSizes() { const availH = height - boardYOffset * 2; const blockFromHeight = availH / boardHeight; // Account for board offset let availW = width; // Start with full width // Subtract space for info boxes if they will be placed on sides const potentialBoxWidth = Math.floor(width * INFO_BOX_WIDTH_PERCENT); const minBoxWidth = Math.max(20, 50); // Ensure boxes are at least 50px wide const finalBoxWidth = Math.max(potentialBoxWidth, minBoxWidth); const spaceForBoxes = (finalBoxWidth + INFO_BOX_MARGIN) * 2; // Space needed on both sides availW = width - spaceForBoxes; // Calculate remaining width for the board const blockFromWidth = availW / boardWidth; // Calculate block size based on available space, ensuring it's positive blockSize = Math.floor(Math.min(blockFromHeight, blockFromWidth)); blockSize = Math.max(5, blockSize); // Min block size // Recalculate board width and center it const totalBoardWidth = boardWidth * blockSize; boardXOffset = Math.floor((width - totalBoardWidth) / 2); // Recalculate info box positions based on the final board position const scoreHeight = SCORE_LINES_FONT_SIZE + SCORE_LINES_Y_MARGIN; const boxTopY = scoreHeight + INFO_BOX_MARGIN; const boxHeight = Math.floor(finalBoxWidth * INFO_BOX_HEIGHT_RATIO); // Use finalBoxWidth for height ratio nextBoxRect = { x: boardXOffset - finalBoxWidth - INFO_BOX_MARGIN, y: boxTopY, width: finalBoxWidth, height: boxHeight }; holdBoxRect = { x: boardXOffset + totalBoardWidth + INFO_BOX_MARGIN, y: boxTopY, width: finalBoxWidth, height: boxHeight }; // Ensure boxes don't go off-screen left/right (might happen on very narrow screens) nextBoxRect.x = Math.max(INFO_BOX_MARGIN, nextBoxRect.x); holdBoxRect.x = Math.min(width - finalBoxWidth - INFO_BOX_MARGIN, holdBoxRect.x); // Ensure boxes have non-negative dimensions nextBoxRect.width = Math.max(0, nextBoxRect.width); nextBoxRect.height = Math.max(0, nextBoxRect.height); holdBoxRect.width = Math.max(0, holdBoxRect.width); holdBoxRect.height = Math.max(0, holdBoxRect.height); }
+        function setup(isInitialSetup = false) {
+             console.log(`--- Running Setup --- isInitial: ${isInitialSetup}`);
+             // Reset core game state variables
+             score = 0;
+             gameOver = false; // Explicitly false
+             isPaused = true; // Start paused by default
+             dropInterval = initialDropInterval;
+             totalLinesCleared = 0;
+             nextSpeedUpMilestone = LINES_PER_SPEED_INCREASE;
+             flashEndTime = 0;
+             speedUpFlashEndTime = 0;
+             tetrisFlashEndTime = 0;
+             isLockDelayActive = false;
+             lockDelayStartTime = 0;
+             currentPiece = null;
+             heldPiece = null;
+             canSwap = true;
+             gameStartTime = 0; // Reset game start time
+             lastFrameTime = performance.now(); // Reset frame timer
+             lastDropTime = 0; // Reset drop timer
+
+             // UI and Board Setup
+             width = window.innerWidth; height = window.innerHeight; canvas.width = width; canvas.height = height;
+             calculateSizes(); // Calculate sizes based on new dimensions
+             MATRIX_setupStreams(); // Reset matrix rain
+             createBoard(); // Create a fresh board
+             nextPiece = getRandomPiece(); // Prepare the first 'next' piece
+
+             if (isInitialSetup) {
+                 // Only happens once on page load
+                 console.log("Initial Setup: Game ready, showing prompt.");
+                 promptElement.style.display = 'block';
+                 resetPromptGlitches();
+             } else {
+                 // Starting or Restarting the game
+                 console.log("Game Start/Restart Setup: Initializing active game state...");
+                 try {
+                     playStartupSequence();
+                     isPaused = false; // --- UNPAUSE THE GAME ---
+                     gameOver = false; // Ensure game over is false
+
+                     spawnPiece(); // --- SPAWN THE FIRST PIECE ---
+
+                     // Check if spawnPiece immediately resulted in game over
+                     if (!gameOver) {
+                         // Game started successfully
+                         gameStartTime = performance.now();
+                         lastDropTime = gameStartTime; // Set initial drop time
+                         lastFrameTime = gameStartTime;
+                         console.log("Game Start/Restart: Spawn successful, game is active.");
+                     } else {
+                         // Game over on first spawn
+                         console.log("Game Start/Restart: GAME OVER occurred immediately on spawn.");
+                         // isPaused is already set to true inside spawnPiece if gameOver happens
+                     }
+                     // Hide prompt regardless of immediate game over
+                     promptElement.style.display = 'none';
+                     resetPromptGlitches();
+
+                 } catch (error) {
+                    console.error("!!!! CRITICAL ERROR DURING setup(false) !!!!", error);
+                    // Attempt to revert to a safe state
+                    isPaused = true;
+                    gameOver = true;
+                    currentPiece = null; // Prevent drawing errors
+                    // Display error message on the prompt screen
+                    promptMainText.textContent = "Error during startup.";
+                    promptFullscreenText.textContent = "Check console log.";
+                    promptVersionText.textContent = "";
+                    promptInstructionsText.innerHTML = "";
+                    promptElement.style.display = 'block'; // Ensure prompt is visible
+                 }
+             }
+             console.log(`--- Setup Complete --- State: ${isPaused ? 'Paused' : 'Active'}, Over: ${gameOver}`);
+         }
+
+        // ===========================================
+        // Fullscreen & Start / Restart Logic
+        // ===========================================
+        function requestAppFullscreen() { const e=document.documentElement;if(e.requestFullscreen)return e.requestFullscreen();else if(e.webkitRequestFullscreen)return e.webkitRequestFullscreen();else if(e.msRequestFullscreen)return e.msRequestFullscreen();else return Promise.resolve(); } // No changes needed here
+
+        function startGameSequence() {
+             console.log(">>> startGameSequence called.");
+             initAudio(); // Ensure audio context is ready
+
+             // Case 1: Game is over - Restart the game
+             if (gameOver) {
+                 console.log("Game is over. Requesting fullscreen and restarting...");
+                 requestAppFullscreen().catch(err => console.warn(`Fullscreen request failed or denied: ${err.message}`)).finally(() => {
+                     console.log("Fullscreen finally() after game over.");
+                     setup(false); // Restart the game by running the non-initial setup
+                 });
+                 return; // Don't proceed further in this function
+             }
+
+             // Case 2: Game is in initial paused state - Start the game
+             if (isPaused && gameStartTime === 0 && !gameOver) {
+                 console.log("Initial paused state. Requesting fullscreen and starting...");
+                 requestAppFullscreen().catch(err => console.warn(`Fullscreen request failed or denied: ${err.message}`)).finally(() => {
+                     console.log("Fullscreen finally() after initial pause.");
+                     // No need to re-check state here, just run the setup to start
+                     setup(false);
+                 });
+                 return; // Don't proceed further
+             }
+
+             // Case 3: Game is already running or in an unexpected state
+             console.warn("startGameSequence called but game is not in a state to start/restart.", {isPaused, gameOver, gameStartTime});
+        }
+        promptElement.addEventListener('click', startGameSequence); // Listener remains the same
+
+        // ===========================================
+        // Touch Controls (Largely unchanged, check touchend for restart)
+        // ===========================================
+        canvas.addEventListener('touchstart', (e) => { e.preventDefault(); initAudio(); /* Restart handled by touchend/click now */ if (isPaused || gameOver || !e.touches[0]) return; touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY; touchStartTime = performance.now(); isDraggingDown = false; isDraggingHorizontally = false; lastSoftDropY = touchStartY; lastHorizontalMoveX = touchStartX; horizontalMoveAccumulator = 0; }, { passive: false });
+        canvas.addEventListener('touchmove', (e) => { e.preventDefault(); if (isPaused || gameOver || !currentPiece || !e.touches[0]) return; const currentX = e.touches[0].clientX; const currentY = e.touches[0].clientY; const totalDeltaX = currentX - touchStartX; const totalDeltaY = currentY - touchStartY; const instantDeltaX = currentX - lastHorizontalMoveX; const instantDeltaY = currentY - lastSoftDropY; const H_DOMINANT = Math.abs(totalDeltaX) > Math.abs(totalDeltaY) * 1.5 && Math.abs(totalDeltaX) > TAP_MOVEMENT_THRESHOLD * 0.8; const V_DOMINANT = Math.abs(totalDeltaY) > Math.abs(totalDeltaX) * 1.5 && totalDeltaY > SOFT_DROP_START_THRESHOLD; if (!isDraggingDown && (isDraggingHorizontally || H_DOMINANT)) { if (!isDraggingHorizontally) { isDraggingHorizontally = true; } horizontalMoveAccumulator += instantDeltaX; const effectiveBlockSize = Math.max(15, blockSize); const requiredPixelDrag = effectiveBlockSize * HORIZONTAL_MOVE_PIXEL_THRESHOLD; while (Math.abs(horizontalMoveAccumulator) >= requiredPixelDrag) { const direction = horizontalMoveAccumulator > 0 ? 1 : -1; if (movePiece(direction, 0).moved) { SOUNDS.MOVE(); horizontalMoveAccumulator -= direction * requiredPixelDrag; } else { horizontalMoveAccumulator = 0; break; } } lastHorizontalMoveX = currentX; lastSoftDropY = currentY; } else if (!isDraggingHorizontally && (isDraggingDown || V_DOMINANT)) { if (!isDraggingDown) { isDraggingDown = true; } if (!isLockDelayActive) { let pixelsDraggedSinceLastDrop = instantDeltaY; let blocksToDrop = Math.floor(pixelsDraggedSinceLastDrop * SOFT_DROP_MOVE_PER_PIXEL); if (blocksToDrop > 0) { let successfulDrops = 0; for (let i = 0; i < blocksToDrop; i++) { if (softDrop()) { successfulDrops++; } else { break; } } if (successfulDrops > 0) { const pixelsPerDrop = SOFT_DROP_MOVE_PER_PIXEL > 0 ? (1 / SOFT_DROP_MOVE_PER_PIXEL) : effectiveBlockSize; lastSoftDropY += successfulDrops * pixelsPerDrop; lastSoftDropY = Math.min(lastSoftDropY, currentY); } } } lastSoftDropY = currentY; lastHorizontalMoveX = currentX; } else { lastHorizontalMoveX = currentX; lastSoftDropY = currentY; } }, { passive: false });
+        canvas.addEventListener('touchend', (e) => {
+             e.preventDefault();
+             const touchEndTime = performance.now();
+             const touchEnd = e.changedTouches[0];
+             if (!touchEnd) return;
+
+             const tEndX = touchEnd.clientX;
+             const tEndY = touchEnd.clientY;
+             const dX = tEndX - touchStartX;
+             const dY = tEndY - touchStartY;
+             const elapsedTime = touchEndTime - touchStartTime;
+
+             // --- Game Over Tap --- Check first
+             if (gameOver) {
+                 // Check if it was a brief tap (not end of a drag)
+                 if (elapsedTime < TAP_TIME_LIMIT && Math.abs(dX) < TAP_MOVEMENT_THRESHOLD && Math.abs(dY) < TAP_MOVEMENT_THRESHOLD) {
+                    console.log("Tap detected on Game Over screen, initiating restart sequence.");
+                    startGameSequence(); // Use sequence which handles restart
+                 }
+                 isDraggingDown = false; isDraggingHorizontally = false; // Reset drag flags
+                 return; // Stop processing further for game over state
+             }
+
+             // --- In-Game Actions --- (Only if not game over)
+             if (isPaused || !currentPiece) { // Ignore input if paused or no piece
+                  isDraggingDown = false; isDraggingHorizontally = false;
+                  return;
+             }
+
+             const wasDraggingDown = isDraggingDown;
+             const wasDraggingHorizontally = isDraggingHorizontally;
+             isDraggingDown = false; isDraggingHorizontally = false; // Reset drag flags
+             horizontalMoveAccumulator = 0;
+
+             let actionTaken = false;
+
+             // 1. Check for TAP (Rotate or Hold/Ignore) - only if NOT dragging significantly
+             if (!wasDraggingDown && !wasDraggingHorizontally && elapsedTime < TAP_TIME_LIMIT && Math.abs(dX) < TAP_MOVEMENT_THRESHOLD && Math.abs(dY) < TAP_MOVEMENT_THRESHOLD) {
+                 let tappedHold = (holdBoxRect.width > 0 && tEndX >= holdBoxRect.x && tEndX <= holdBoxRect.x + holdBoxRect.width && tEndY >= holdBoxRect.y && tEndY <= holdBoxRect.y + holdBoxRect.height);
+                 let tappedNext = (nextBoxRect.width > 0 && tEndX >= nextBoxRect.x && tEndX <= nextBoxRect.x + nextBoxRect.width && tEndY >= nextBoxRect.y && tEndY <= nextBoxRect.y + nextBoxRect.height);
+                 if (tappedHold && canSwap) { swapPiece(); actionTaken = true; }
+                 else if (tappedNext) { /* Ignore */ actionTaken = false; }
+                 else if (!tappedHold && !tappedNext) { rotatePiece(); actionTaken = true; }
+             }
+
+             // 2. Check for SWIPE (Hard Drop) - only if NOT a tap and not dragging horizontally
+             if (!actionTaken && !wasDraggingHorizontally && elapsedTime < SWIPE_TIME_LIMIT) {
+                 if (Math.abs(dY) > SWIPE_THRESHOLD && Math.abs(dY) > Math.abs(dX) * 1.5) { hardDrop(); actionTaken = true; }
+             }
+
+             // 3. End of DRAG behavior (Check for landing)
+             if (!actionTaken && (wasDraggingDown || wasDraggingHorizontally)) {
+                 if (currentPiece && !isLockDelayActive && !isValidMove(currentPiece.shape, currentRow + 1, currentCol)) {
+                    // console.log("End of drag detected piece landed, starting lock delay.");
+                     isLockDelayActive = true;
+                     lockDelayStartTime = performance.now();
+                 }
+                 actionTaken = true;
+             }
+        }, { passive: false });
+
+
+        // ===========================================
+        // Keyboard Controls (Check Enter key logic)
+        // ===========================================
+        window.addEventListener('keydown', (e) => {
+            // Start/Restart on Enter - This handles both initial start and restart after game over
+            if (e.key === 'Enter' && (gameOver || (isPaused && gameStartTime === 0))) {
+                e.preventDefault();
+                console.log(`Enter key pressed. State: gameOver=${gameOver}, isPaused=${isPaused}, gameStartTime=${gameStartTime}. Initiating sequence...`);
+                startGameSequence(); // Use the unified start/restart sequence
+                return;
+            }
+
+            // Ignore regular game input if paused, game over, or no piece
+            if (isPaused || gameOver || !currentPiece) {
+                 return;
+            }
+
+            // Prevent default for game keys used during active play
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Shift'].includes(e.key) || e.code === 'Space') {
+                e.preventDefault();
+                initAudio(); // Ensure audio is ready on first key press
+            }
+
+            let moveResult;
+            switch (e.key) {
+                case 'ArrowLeft': moveResult = movePiece(-1, 0); if(moveResult.moved) SOUNDS.MOVE(); break;
+                case 'ArrowRight': moveResult = movePiece(1, 0); if(moveResult.moved) SOUNDS.MOVE(); break;
+                case 'ArrowDown': softDrop(); break;
+                case 'ArrowUp': hardDrop(); break;
+                case ' ': case 'Spacebar': rotatePiece(); break;
+                case 'Shift': swapPiece(); break;
+            }
+        });
+
+        // ===========================================
+        // Resize & Initial Start
+        // ===========================================
+        window.addEventListener('resize', () => {
+             width = window.innerWidth; height = window.innerHeight; canvas.width = width; canvas.height = height;
+             calculateSizes(); // Recalculate sizes
+             MATRIX_setupStreams(); // Reinitialize matrix streams
+             // No game restart on resize needed
+             console.log("Window resized.");
+        });
+
+        // --- Initial Setup & Start Game Loop ---
+        setup(true); // Run initial setup (game starts paused, prompt shown)
+        requestAnimationFrame(gameLoop); // Start the rendering loop
+        console.log(">>> Matrix Tetris Initialized (Paused) <<<");
+
+    })(); // End of IIFE
+    </script>
+</body>
+</html>
