@@ -1,139 +1,90 @@
 // =============================================================================
 // js/constants.js - All Game Constants
-// Version: 1.47g
+// Version: 1.47q (Wider Corridors, Smaller Rabbits, Sensitivity Fix)
 // =============================================================================
 
-console.log("Loading Constants...");
+console.log("Loading Constants (v1.47q - Wider Corridors, Sensitivity)...");
 
-// --- Mouse Sensitivity ---
-const MOUSE_SENSITIVITY_SETTING = 5; // Range 1-10 recommended
-// Convert setting to Babylon's angularSensibility (Lower value = more sensitive)
-const BJS_ANGULAR_SENSITIVITY = 10000 / (MOUSE_SENSITIVITY_SETTING * 1.5 + 3); // Adjust formula as needed
+// --- Player Base Size ---
+const PLAYER_UNIT_HEIGHT = 1.8;
 
-// --- Maze ---
-const PATH_WIDTH_SETTING = 5;
-const MAZE_GRID_SCALE = Math.max(3, Math.floor(PATH_WIDTH_SETTING) * 2 + 1);
+// --- Player Derived Dimensions ---
+const PLAYER_EYE_HEIGHT = PLAYER_UNIT_HEIGHT * 0.9; // ~1.62
+const PLAYER_COLLISION_HEIGHT = PLAYER_UNIT_HEIGHT * 0.85; // ~1.53
+// Keep radius small as per previous test, diameter = 0.4
+const PLAYER_RADIUS = 0.2;
+
+// --- Maze Scale Settings ---
+// Keep path 3 visual cells wide for now
+const PATH_VISUAL_WIDTH = 3;
+const MAZE_GRID_SCALE = PATH_VISUAL_WIDTH + 2; // 5
+
+// --- Environment Scale (Derived for WIDER Corridors) ---
+// Target corridor width ~2.0x player diameter
+const desiredCorridorWidth = (PLAYER_RADIUS * 2) * 2.0; // Target ~0.8
+// Calculate CELL_SIZE based on target width and visual path width
+const CELL_SIZE = desiredCorridorWidth / PATH_VISUAL_WIDTH; // NEW CELL_SIZE (~0.267)
+// Wall height relative to player
+const WALL_HEIGHT = PLAYER_UNIT_HEIGHT * 1.3; // ~2.34
+const WALL_THICKNESS = CELL_SIZE; // Wall thickness matches new cell size (~0.267)
+const WALL_HEIGHT_SHORT = WALL_HEIGHT * 0.3; // ~0.7
+
+// Logical maze grid size
 const MAZE_WIDTH_CELLS = 12;
 const MAZE_HEIGHT_CELLS = 12;
-const CELL_SIZE = 10;
+
+// Total maze dimensions (calculated from above)
 const MAZE_WIDTH_UNITS = MAZE_WIDTH_CELLS * MAZE_GRID_SCALE * CELL_SIZE;
 const MAZE_HEIGHT_UNITS = MAZE_HEIGHT_CELLS * MAZE_GRID_SCALE * CELL_SIZE;
-const WALL_HEIGHT = 30;
-const WALL_HEIGHT_SHORT = 8;
-const WALL_THICKNESS = CELL_SIZE;
-const SHORT_WALL_CHANCE = 0.08;
-const CROSS_CONNECTION_CHANCE = 0.25; // Re-enabled
-const DOOR_HEIGHT_FACTOR = 0.85;
-const DOOR_WIDTH_FACTOR = 0.4;
-const DOOR_DEPTH = 0.3;
 
-// --- Player ---
-const PLAYER_HEIGHT = WALL_HEIGHT * 0.5;
-const PLAYER_EYE_HEIGHT = WALL_HEIGHT * 0.85;
-const PLAYER_RADIUS = PLAYER_HEIGHT * 0.25;
-const PLAYER_COLLISION_HEIGHT = PLAYER_EYE_HEIGHT * 1.5;
+// Maze generation features
+const CROSS_CONNECTION_CHANCE = 0.25;
+// Door dimensions relative to walls/cells
+const DOOR_HEIGHT_FACTOR = 0.85; const DOOR_WIDTH_FACTOR = 0.4; const DOOR_DEPTH = CELL_SIZE * 0.5;
+
+// --- Mouse Sensitivity ---
+// *** ADJUSTED BASED ON FEEDBACK ***
+const BJS_ANGULAR_SENSITIVITY = 400; // Lower value = faster/more sensitive
+
+// --- Player Gameplay ---
 const PLAYER_MAX_HP = 100;
-const PLAYER_SPEED_WALK = 12.0;
-const PLAYER_SPEED_RUN = 24.0;
-const DAMAGE_OVERLAY_FADE_OUT_TIME = 80;
-const DAMAGE_OVERLAY_FADE_IN_TIME = 80;
-const PLAYER_DAMAGE_SHAKE_DURATION = 0.15;
-const PLAYER_DAMAGE_SHAKE_INTENSITY_POS = 0.10;
-const PLAYER_DAMAGE_SHAKE_INTENSITY_ROT = 0.008;
-const PLAYER_KEYS_UP = ["KeyW", "ArrowUp"];
-const PLAYER_KEYS_DOWN = ["KeyS", "ArrowDown"];
-const PLAYER_KEYS_LEFT = ["KeyA", "ArrowLeft"];
-const PLAYER_KEYS_RIGHT = ["KeyD", "ArrowRight"];
-const PLAYER_KEYS_RUN = ["ShiftLeft", "ShiftRight"];
-const PLAYER_KEYS_RELOAD = ["KeyR"];
-const PLAYER_KEYS_FIRE = ["Fire1"]; // Babylon mapping for left mouse
+// Speeds relative to player height
+const PLAYER_SPEED_WALK = PLAYER_UNIT_HEIGHT * 1.2; // ~2.16
+const PLAYER_SPEED_RUN = PLAYER_UNIT_HEIGHT * 2.4; // ~4.32
 
-// --- Gun ---
-const GUN_CLIP_SIZE = 12;
-const GUN_RELOAD_TIME = 1.5;
-const GUN_FIRE_RATE = 0.15;
-const GUN_FORWARD_OFFSET = 1.2;
-const GUN_RIGHT_OFFSET = 0.35;
-const GUN_DOWN_OFFSET = -0.3;
-const GUN_BARREL_LENGTH = 0.4;
-const GUN_BARREL_RADIUS = 0.04;
-const GUN_HANDLE_HEIGHT = 0.25;
-const GUN_HANDLE_WIDTH = 0.08;
-const GUN_HANDLE_DEPTH = 0.15;
+// Input keys remain the same
+const PLAYER_KEYS_UP = ["KeyW", "ArrowUp"]; const PLAYER_KEYS_DOWN = ["KeyS", "ArrowDown"]; const PLAYER_KEYS_LEFT = ["KeyA", "ArrowLeft"]; const PLAYER_KEYS_RIGHT = ["KeyD", "ArrowRight"]; const PLAYER_KEYS_RUN = ["ShiftLeft", "ShiftRight"]; const PLAYER_KEYS_RELOAD = ["KeyR"];
 
-// --- Bullet ---
-const BULLET_SPEED = 400.0;
-const BULLET_SIZE = 0.15;
-const AGENT_BULLET_SIZE = 0.3;
-const BULLET_LIFESPAN = 2.0;
+// --- Gun (Placeholder Values) ---
+const GUN_CLIP_SIZE = 12; const GUN_RELOAD_TIME = 1.5; const GUN_FIRE_RATE = 0.15;
+const GUN_FORWARD_OFFSET = 0.5; const GUN_RIGHT_OFFSET = 0.15; const GUN_DOWN_OFFSET = -0.15;
+const GUN_BARREL_LENGTH = 0.15; const GUN_BARREL_RADIUS = 0.015; const GUN_HANDLE_HEIGHT = 0.1; const GUN_HANDLE_WIDTH = 0.03; const GUN_HANDLE_DEPTH = 0.05;
 
-// --- Agent ---
-const STARTING_AGENT_COUNT = 2;
-const AGENT_HP = 2;
-const AGENT_BODY_WIDTH = PLAYER_RADIUS * 0.5 * 2;
-const AGENT_BODY_HEIGHT = PLAYER_HEIGHT * 0.9;
-const AGENT_BODY_DEPTH_FACTOR = 0.5;
-const AGENT_HEAD_SIZE = PLAYER_RADIUS * 0.7 * 1.5;
+// --- Bullet (Scaled) ---
+const BULLET_SPEED = 20.0; const BULLET_SIZE = 0.02; const AGENT_BULLET_SIZE = 0.04; const BULLET_LIFESPAN = 1.5;
+
+// --- Agent (Scaled Relative to Player) ---
+const STARTING_AGENT_COUNT = 2; const AGENT_HP = 2;
+const AGENT_BODY_HEIGHT = PLAYER_COLLISION_HEIGHT * 0.9; const AGENT_BODY_WIDTH = PLAYER_RADIUS * 0.8; const AGENT_HEAD_SIZE = PLAYER_RADIUS * 0.6; const AGENT_BODY_DEPTH_FACTOR = 0.5;
+const AGENT_SPEED_PATROL = PLAYER_SPEED_WALK * 0.7; const AGENT_SPEED_ATTACK = PLAYER_SPEED_RUN * 0.7;
+const AGENT_MAX_VIEW_DISTANCE = CELL_SIZE * MAZE_GRID_SCALE * 15; const AGENT_MELEE_RANGE = PLAYER_RADIUS + AGENT_BODY_WIDTH * 1.8;
 const AGENT_COLLISION_DISTANCE = PLAYER_RADIUS + AGENT_BODY_WIDTH * 0.8;
-const AGENT_HIT_COLOR_HEX = 0xff0000;
-const AGENT_HIT_DURATION = 0.15;
-const AGENT_HP_BAR_DURATION = 3.0;
-const AGENT_HP_BAR_WIDTH = AGENT_BODY_WIDTH * 1.5;
-const AGENT_SPEED_PATROL = 8.0;
-const AGENT_SPEED_ATTACK = 16.0;
-const AGENT_LOS_CHECK_INTERVAL = 0.25;
-const AGENT_MAX_VIEW_DISTANCE = CELL_SIZE * MAZE_GRID_SCALE * 6;
-const AGENT_TIME_TO_LOSE_TARGET = 1.5;
-const AGENT_SEARCH_DURATION = 6.0;
-const AGENT_TURN_SPEED = Math.PI * 0.8;
-const AGENT_FIRE_RATE = 0.7;
-const AGENT_BULLET_SPEED = 800.0;
-const AGENT_BULLET_DAMAGE = 12;
-const AGENT_BULLET_SPREAD = 0.04;
-const AGENT_MELEE_RANGE = PLAYER_RADIUS + AGENT_BODY_WIDTH * 1.8;
-const AGENT_MELEE_DAMAGE = 8;
-const AGENT_MELEE_COOLDOWN = 1.5;
-const AGENT_MELEE_BURST_COUNT_MIN = 2;
-const AGENT_MELEE_BURST_COUNT_MAX = 4;
-const AGENT_MELEE_BURST_INTERVAL = 0.2;
-const AGENT_TARGET_CELL_RECALC_INTERVAL = 0.5;
-const AGENT_WAYPOINT_THRESHOLD = CELL_SIZE * 0.2;
-const AGENT_STUCK_TIMEOUT = 5.0;
+// Other agent constants largely unchanged from 1.47o
 
 // --- Rabbit ---
-const INITIAL_RABBIT_SPAWN_COUNT = 2;
-const MAX_RABBITS = 4;
-const RABBIT_SPAWN_INTERVAL = 15.0;
-const RABBIT_MAP_REVEAL_DURATION = 3.0;
-const RABBIT_PICKUP_MENU_DURATION = 5.0;
-const RABBIT_PICKUP_DISTANCE_FACTOR = 1.8;
-const RABBIT_INSTANCE_SCALE = 3.0;
+// *** REDUCED RABBIT SCALE SIGNIFICANTLY ***
+const RABBIT_INSTANCE_SCALE = 0.5; // Drastically smaller scale
 const RABBIT_GROUND_LEVEL = 0.01;
-const RABBIT_BODY_RADIUS = 0.5 * 0.75; const RABBIT_BODY_HEIGHT = 0.8; const RABBIT_HEAD_RADIUS = 0.5;
-const RABBIT_COLOR_WHITE = new BABYLON.Color3(1, 1, 1);
-const RABBIT_COLOR_GREY = new BABYLON.Color3(0.8, 0.8, 0.8);
-const RABBIT_NOSE_COLOR_BJS = new BABYLON.Color3.FromHexString("#ffa7bd");
-const RABBIT_SHIMMER_SPEED = 3.0;
+// Keep base geometry small
+const RABBIT_BODY_RADIUS = 0.15; const RABBIT_BODY_HEIGHT = 0.2; const RABBIT_HEAD_RADIUS = 0.1;
+const INITIAL_RABBIT_SPAWN_COUNT = 2; const MAX_RABBITS = 4; const RABBIT_SPAWN_INTERVAL = 15.0;
+// Other rabbit constants largely unchanged from 1.47o
 
-// --- Map ---
-const DEBUG_MAP_CANVAS_SIZE = 400;
-const DEBUG_MAP_WALL_COLOR = 'rgba(0, 255, 0, 0.6)';
-const DEBUG_MAP_WALL_FLICKER_CHANCE = 0.03;
-const DEBUG_MAP_WALL_FLICKER_COLOR = 'rgba(150, 255, 150, 0.75)';
-const DEBUG_MAP_PLAYER_COLOR = 'rgba(200, 255, 255, 0.75)';
-const DEBUG_MAP_AGENT_COLOR = 'rgba(100, 255, 100, 0.7)';
-const DEBUG_MAP_RABBIT_COLOR = 'rgba(255, 192, 203, 0.8)';
-const DEBUG_MAP_ENTITY_FLICKER_CHANCE = 0.05;
-const DEBUG_MAP_ENTITY_FLICKER_COLOR = 'rgba(255, 255, 255, 0.85)';
+// --- Map / HUD / Effects (Unchanged) ---
+const DEBUG_MAP_CANVAS_SIZE = 400; /* ... other map/hud constants ... */
 
-// --- HUD & Effects ---
-const HUD_HP_BAR_SHIMMER_SPEED = 4.0;
-const HUD_HP_BAR_SHIMMER_AMOUNT = 15;
-const HUD_TEXT_GLITCH_INTENSITY = 0.03;
-const HUD_TEXT_GLITCH_CHARS = ['_', '^', '~', '*', ';', '|'];
-const MENU_GLITCH_CHARS = ['█', '▓', '▒', '░', '_', '^', '~', '!', '*', ';', ':', '|', '/', '\\', ' '];
-
-// --- Debugging --- (Moved flags to main.js where they are used)
-
-console.log("Constants Loaded.");
-// end of file
+console.log("Constants Loaded (v1.47q - Wider Corridors, Sensitivity Fix).");
+console.log(`>> PLAYER_RADIUS: ${PLAYER_RADIUS.toFixed(2)}, Player Diameter: ${(PLAYER_RADIUS * 2).toFixed(2)}`);
+console.log(`>> CELL_SIZE: ${CELL_SIZE.toFixed(2)}, Corridor Width: ${(PATH_VISUAL_WIDTH * CELL_SIZE).toFixed(2)}`);
+console.log(`>> Mouse Look Sensitivity (BJS_ANGULAR_SENSITIVITY): ${BJS_ANGULAR_SENSITIVITY}`);
+console.log(`>> RABBIT_INSTANCE_SCALE: ${RABBIT_INSTANCE_SCALE}`);

@@ -1,11 +1,13 @@
 // =============================================================================
-// js/agents.js - Agent Creation, AI Logic, Pathfinding Helpers
-// Version: 1.47f (Refactored - Stub)
+// js/agents.js - Agent Creation, AI Logic
+// Version: 1.47g (Refactored - Basic Definitions)
 // =============================================================================
 
 // Relies on constants from constants.js
 // Relies on globals from main.js: agents, scene, camera, agentsRemaining
-// Relies on functions: worldToGrid, gridToWorld (environment.js), findPathAStar, gridPathToWorldPath, findRandomReachableCell (environment.js), updateHUD (ui.js)
+// Relies on functions: worldToGrid, gridToWorld (environment.js), findRandomReachableCell (environment.js), updateHUD (ui.js)
+
+console.log("Loading agents.js..."); // Log loading
 
 function createAgents_BJS(scene) { // Accept scene
     // Requires globals: agents, agentsRemaining, camera
@@ -13,6 +15,7 @@ function createAgents_BJS(scene) { // Accept scene
     // Requires functions: worldToGrid, gridToWorld, findRandomReachableCell, updateHUD
     console.log(`BJS [agents.js]: Creating ${STARTING_AGENT_COUNT} agents...`);
     if (!scene) { console.error("Scene not provided to createAgents_BJS!"); return; }
+    if (!camera) { console.error("Camera not available for createAgents_BJS!"); return; } // Need camera for start pos check
 
     const agentBodyMaterial = new BABYLON.StandardMaterial("agentBodyMat", scene);
     agentBodyMaterial.diffuseColor = new BABYLON.Color3.FromHexString("#111111");
@@ -36,7 +39,7 @@ function createAgents_BJS(scene) { // Accept scene
         console.log(`   Agent ${i} spawned at grid (${spawnGridPos.x}, ${spawnGridPos.y})`);
     }
     agentsRemaining = agents.length; // Set global count
-    updateHUD(); // Update UI
+    if (typeof updateHUD === "function") updateHUD(); // Update UI if possible
     console.log("BJS [agents.js]: Agent creation finished.");
 }
 
@@ -44,61 +47,25 @@ function updateAgents_BJS(delta, time) {
     // Requires globals: agents, scene, tempVec3
     // Requires constants: AGENT_*
     // Requires functions: generateNewPatrolPath_BJS (this file)
-    if (!agents.length || !scene) return;
-    agents.forEach(agent => {
-        if (!agent || agent.hp <= 0 || !agent.rootNode) return;
 
-        // *** Agent pathfinding and movement temporarily disabled ***
-        // const agentPos = agent.rootNode.position;
-        // agent.stuckLogTimer -= delta;
-        // const currentState = agent.state; let nextState = currentState;
-        // let needsPathUpdate = false;
-        // if (agent.state === 'patrolling' && (!agent.pathToTarget || agent.pathToTarget.length === 0 || agent.currentPathIndex === -1)) {
-        //     needsPathUpdate = true;
-        // }
-        // if (needsPathUpdate) {
-        //     // generateNewPatrolPath_BJS(agent); // <--- THIS CALL IS DISABLED
-        //     agent.timeSinceLastMove = 0;
-        // }
-        // let isMoving = false; const agentSpeed = AGENT_SPEED_PATROL;
-        // if (agent.currentWaypoint) { ... movement logic ... }
-        // else { ... }
-        // if (!isMoving && agent.state === 'patrolling' && agent.timeSinceLastMove > AGENT_STUCK_TIMEOUT) { ... stuck logic ... }
-    });
+    // *** Agent pathfinding and movement temporarily disabled to avoid A* errors ***
+     if (!agents.length || !scene) return;
+     agents.forEach(agent => {
+         if (!agent || agent.hp <= 0 || !agent.rootNode) return;
+         // Future logic will go here
+     });
 }
 
+// Stubs for path generation helpers (A* itself is in environment.js)
 function generateNewPatrolPath_BJS(agent) {
-    // Requires globals: mazeGrid, agent
-    // Requires functions: worldToGrid, findRandomReachableCell, generatePathToTarget_BJS
-    if (!agent || !agent.rootNode) return false;
-    const currentGridPos = worldToGrid(agent.rootNode.position.x, agent.rootNode.position.z);
-    agent.gridX = currentGridPos.x; agent.gridY = currentGridPos.y;
-    const startCell = mazeGrid[agent.gridY]?.[agent.gridX];
-    if (!startCell || !startCell.isPath) { return false; }
-    let targetCell = null; let attempts = 0;
-    do { targetCell = findRandomReachableCell(); attempts++; }
-    while (targetCell && targetCell.x === startCell.x && targetCell.y === startCell.y && attempts < 10);
-    if (!targetCell) { return false; }
-    agent.targetGridPos = targetCell;
-    return generatePathToTarget_BJS(agent, targetCell.x, targetCell.y);
-}
-
+     console.warn("generateNewPatrolPath_BJS called (agents.js) - Currently disabled");
+     // Requires functions: worldToGrid, findRandomReachableCell, generatePathToTarget_BJS
+     return false;
+ }
 function generatePathToTarget_BJS(agent, targetGridX, targetGridY) {
-    // Requires globals: mazeGrid, agent
-    // Requires functions: findPathAStar, gridPathToWorldPath (environment.js)
-    if (!agent) return false;
-    const startCell = mazeGrid[agent.gridY]?.[agent.gridX];
-    const endCell = mazeGrid[targetGridY]?.[targetGridX];
-    if (!startCell || !startCell.isPath || !endCell || !endCell.isPath) { agent.pathToTarget = []; agent.currentPathIndex = -1; agent.currentWaypoint = null; return false; }
-    const gridPath = findPathAStar(mazeGrid, startCell, endCell); // findPathAStar in environment.js
-    if (gridPath && gridPath.length > 0) {
-        agent.pathToTarget = gridPathToWorldPath(gridPath); // gridPathToWorldPath in environment.js
-        agent.currentPathIndex = 0;
-        agent.currentWaypoint = agent.pathToTarget[agent.currentPathIndex];
-        return true;
-    } else {
-        agent.pathToTarget = []; agent.currentPathIndex = -1; agent.currentWaypoint = null; return false;
-    }
-}
+     console.warn("generatePathToTarget_BJS called (agents.js) - Currently disabled");
+    // Requires functions: findPathAStar, gridPathToWorldPath
+     return false;
+ }
 
-/* Three.js Reference omitted */
+// end of file
